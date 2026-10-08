@@ -1,0 +1,54 @@
+# Environnement DEV/SIT complet. Secrets via .env (voir .env.example). En PROD : segmentation réseau, VPN opérateurs, secret manager.
+services:
+  postgres:
+    image: postgres:16
+    environment: { POSTGRES_DB: vas, POSTGRES_USER: vas, POSTGRES_PASSWORD: "${DB_PASSWORD}" }
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U vas"], interval: 5s, retries: 10 }
+  redis:
+    image: redis:7
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: [redisdata:/data]
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    environment: { RABBITMQ_DEFAULT_USER: vas, RABBITMQ_DEFAULT_PASS: "${RABBIT_PASSWORD}" }
+    volumes: [rabbitdata:/var/lib/rabbitmq]
+  jasmin:
+    image: jookies/jasmin:0.10
+    environment:
+      REDIS_CLIENT_HOST: redis
+      AMQP_BROKER_HOST: rabbitmq
+      AMQP_BROKER_PORT: "5672"
+      ENABLE_PUBLISH_SUBMIT_SM_RESP: "1"
+    depends_on: [redis, rabbitmq]
+    ports: ["2775:2775"]          # serveur SMPP (clients techniques) - à restreindre
+    volumes: [jasminconf:/etc/jasmin/store]
+    # jcli (8990) et HTTP API (1401) NON publiés : accessibles au réseau interne uniquement
+  app:
+    build: .
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/vas
+      DB_PASSWORD: "${DB_PASSWORD}"
+      RABBIT_HOST: rabbitmq
+      RABBIT_USER: vas
+      RABBIT_PASSWORD: "${RABBIT_PASSWORD}"
+      REDIS_HOST: redis
+      JASMIN_URL: http://jasmin:1401
+      JASMIN_PASSWORD: "${JASMIN_PASSWORD}"
+      CALLBACK_SECRET: "${CALLBACK_SECRET}"
+      ADMIN_PASSWORD_HASH: "${ADMIN_PASSWORD_HASH}"
+      VAS_PUBLIC_BASE_URL: http://app:8080
+    depends_on: { postgres: { condition: service_healthy }, rabbitmq: { condition: service_started }, redis: { condition: service_started } }
+    ports: ["8080:8080"]
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    volumes: ["./infra/prometheus:/etc/prometheus:ro"]
+    ports: ["9090:9090"]
+  grafana:
+    image: grafana/grafana:11.2.0
+    environment: { GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_PASSWORD}" }
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports: ["3000:3000"]
+volumes: { pgdata: {}, redisdata: {}, rabbitdata: {}, jasminconf: {} }

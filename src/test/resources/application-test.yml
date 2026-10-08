@@ -1,0 +1,38 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:vas;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    username: sa
+    password: ""
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+management:
+  health:
+    redis:
+      enabled: false
+    rabbit:
+      enabled: false
+vas:
+  queue: memory
+  rate-limit: memory
+  public-base-url: http://localhost
+  mo-dedup-seconds: 30
+  jasmin:
+    simulator: true
+  callback:
+    shared-secret: test-secret
+  retry:
+    max-attempts: 3
+    backoff-seconds: 0
+  admin-users:
+    - username: admin
+      password-hash: "{noop}admin"
+      roles: [SUPER_ADMIN]
+    - username: finance
+      password-hash: "{noop}finance"
+      roles: [FINANCE]
+    - username: finance2
+      password-hash: "{noop}finance2"
+      roles: [FINANCE]

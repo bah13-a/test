@@ -1,0 +1,53 @@
+spring:
+  application:
+    name: vas-platform
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/vas}
+    username: ${DB_USER:vas}
+    password: ${DB_PASSWORD:vas}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  rabbitmq:
+    host: ${RABBIT_HOST:localhost}
+    username: ${RABBIT_USER:guest}
+    password: ${RABBIT_PASSWORD:guest}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+  servlet:
+    multipart:
+      max-file-size: 20MB
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+vas:
+  queue: ${VAS_QUEUE:rabbit}            # rabbit | memory (dev/tests)
+  rate-limit: ${VAS_RATE_LIMIT:redis}   # redis | memory
+  public-base-url: ${VAS_PUBLIC_BASE_URL:http://vas-app:8080}
+  mo-dedup-seconds: 30
+  jasmin:
+    base-url: ${JASMIN_URL:http://jasmin:1401}
+    password: ${JASMIN_PASSWORD:change-me}
+    simulator: ${VAS_SIMULATOR:false}
+  callback:
+    shared-secret: ${CALLBACK_SECRET:change-me-callback}
+  retry:
+    max-attempts: 5
+    backoff-seconds: 30
+  # Comptes back-office : mots de passe BCrypt fournis par l'environnement (jamais en clair dans le dépôt)
+  admin-users:
+    - username: ${ADMIN_USER:admin}
+      password-hash: ${ADMIN_PASSWORD_HASH:}
+      roles: [SUPER_ADMIN]

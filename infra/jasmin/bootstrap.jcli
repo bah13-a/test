@@ -1,0 +1,51 @@
+# GABARIT de provisioning Jasmin (jcli), à valider sur l'environnement de test - À ADAPTER avec les paramètres fournis par chaque opérateur (Annexe B du CDC).
+# Exécution : docker compose exec jasmin bash -c "jcli < /bootstrap.jcli"   (secrets injectés par envsubst, jamais commités)
+# --- Connecteur SMPP Tunisie Telecom (modèle identique pour ORANGE / OOREDOO) ---
+smppccm -a
+cid smppc_tt
+host ${TT_SMSC_HOST}
+port ${TT_SMSC_PORT}
+username ${TT_SYSTEM_ID}
+password ${TT_PASSWORD}
+bind transceiver
+ripf 0
+con_fail_delay 10
+con_loss_retry yes
+con_loss_delay 10
+submit_throughput ${TT_TPS}
+ok
+smppccm -1 smppc_tt
+# --- Utilisateur Jasmin dédié à l'opérateur (sélectionné par l'application via username=vas_tt) ---
+group -a
+gid vas
+ok
+user -a
+username vas_tt
+password ${JASMIN_PASSWORD}
+gid vas
+uid vas_tt
+ok
+# --- Route MT : tout le trafic de vas_tt part sur le connecteur TT ---
+filter -a
+type UserFilter
+fid vas_tt_filter
+uid vas_tt
+ok
+mtrouter -a
+type StaticMTRoute
+order 10
+connector smppc(smppc_tt)
+filters vas_tt_filter
+rate 0.0
+ok
+# --- Route MO : deliver_sm entrants -> callback HTTP de l'application ---
+httpccm -a
+cid vas_app
+url http://app:8080/callbacks/mo?secret=${CALLBACK_SECRET}
+method POST
+ok
+morouter -a
+type DefaultRoute
+connector http(vas_app)
+rate 0.0
+ok

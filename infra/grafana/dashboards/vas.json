@@ -1,0 +1,15 @@
+{
+  "title": "VAS - Opérations", "uid": "vas-ops", "schemaVersion": 39, "version": 1, "refresh": "10s",
+  "panels": [
+    {"id":1,"type":"timeseries","title":"MO reçus / s par issue","gridPos":{"x":0,"y":0,"w":12,"h":8},
+     "targets":[{"expr":"sum by (outcome) (rate(vas_mo_total[1m]))"}]},
+    {"id":2,"type":"timeseries","title":"MT / s par statut","gridPos":{"x":12,"y":0,"w":12,"h":8},
+     "targets":[{"expr":"sum by (status) (rate(vas_mt_total[1m]))"}]},
+    {"id":3,"type":"stat","title":"MT en attente (backlog)","gridPos":{"x":0,"y":8,"w":6,"h":4},
+     "targets":[{"expr":"vas_mt_pending"}]},
+    {"id":4,"type":"timeseries","title":"Latence HTTP P95 (API / callbacks)","gridPos":{"x":6,"y":8,"w":18,"h":8},
+     "targets":[{"expr":"histogram_quantile(0.95, sum by (le, uri) (rate(http_server_requests_seconds_bucket[5m])))"}]},
+    {"id":5,"type":"timeseries","title":"Heap JVM","gridPos":{"x":0,"y":16,"w":12,"h":8},
+     "targets":[{"expr":"sum(jvm_memory_used_bytes{area=\"heap\"})"}]}
+  ]
+}

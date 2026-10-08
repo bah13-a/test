@@ -1,0 +1,18 @@
+groups:
+  - name: vas
+    rules:
+      - alert: AppDown
+        expr: up{job="vas-app"} == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations: { summary: "Plateforme VAS injoignable" }
+      - alert: HighJvmHeap
+        expr: sum(jvm_memory_used_bytes{area="heap"}) / sum(jvm_memory_max_bytes{area="heap"}) > 0.9
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "Heap JVM > 90 %" }
+      - alert: MtBacklog
+        expr: vas_mt_pending > 1000
+        for: 5m
+        labels: { severity: critical }
+        annotations: { summary: "File MT en attente > 1000 depuis 5 min (lien opérateur ?)" }
