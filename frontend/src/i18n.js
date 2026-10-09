@@ -11,7 +11,7 @@ const D = {
     empty: 'Aucune donnée', error: 'Erreur', ok: 'Opération réussie', loading: 'Chargement…', hours: 'Heures', pending: 'MT en attente', deliveryRate: 'Taux de livraison',
     mfaSetup: 'Activer le MFA', mfaSecret: 'Secret TOTP (à saisir dans votre application)', mfaConfirm: 'Confirmer', mfaEnabled: 'MFA actif', estimated: 'Montant estimé',
     reconciled: 'Montant rapproché', file: 'Fichier (CSV / XLSX)', from: 'Du', to: 'Au', simulate: 'Simuler', msisdn: 'MSISDN', keywords: 'Mots-clés', replies: 'Réponses',
-    regulatory: 'Approbation réglementaire', forbidden: 'Droits insuffisants', mfaRequired: 'Code MFA requis', mfaReconnect: 'MFA activé : reconnectez-vous avec votre code', badCreds: 'Identifiants invalides',
+    regulatory: 'Approbation réglementaire', forbidden: 'Droits insuffisants', mfaRequired: 'Code MFA requis', devBanner: 'ENVIRONNEMENT DE DÉMONSTRATION — données fictives, mocks actifs', devAccounts: 'Démo : admin / Admin-dev-pass1 · manager, noc, finance, finance2, support, auditor, club / Dev-pass-12345', mfaReconnect: 'MFA activé : reconnectez-vous avec votre code', badCreds: 'Identifiants invalides',
   },
   en: {
     app: 'VAS Platform', login: 'Sign in', username: 'Username', password: 'Password', totp: 'MFA code (6 digits)', logout: 'Sign out',
@@ -22,7 +22,7 @@ const D = {
     empty: 'No data', error: 'Error', ok: 'Done', loading: 'Loading…', hours: 'Hours', pending: 'Pending MT', deliveryRate: 'Delivery rate',
     mfaSetup: 'Enable MFA', mfaSecret: 'TOTP secret (enter it in your authenticator app)', mfaConfirm: 'Confirm', mfaEnabled: 'MFA enabled', estimated: 'Estimated amount',
     reconciled: 'Reconciled amount', file: 'File (CSV / XLSX)', from: 'From', to: 'To', simulate: 'Simulate', msisdn: 'MSISDN', keywords: 'Keywords', replies: 'Replies',
-    regulatory: 'Regulatory approval', forbidden: 'Insufficient rights', mfaRequired: 'MFA code required', mfaReconnect: 'MFA enabled: sign in again with your code', badCreds: 'Invalid credentials',
+    regulatory: 'Regulatory approval', forbidden: 'Insufficient rights', mfaRequired: 'MFA code required', devBanner: 'DEMO ENVIRONMENT — fake data, mocks enabled', devAccounts: 'Demo: admin / Admin-dev-pass1 · manager, noc, finance, finance2, support, auditor, club / Dev-pass-12345', mfaReconnect: 'MFA enabled: sign in again with your code', badCreds: 'Invalid credentials',
   },
   ar: {
     app: 'منصة القيمة المضافة', login: 'تسجيل الدخول', username: 'اسم المستخدم', password: 'كلمة المرور', totp: 'رمز التحقق (6 أرقام)', logout: 'خروج',
@@ -33,7 +33,7 @@ const D = {
     empty: 'لا توجد بيانات', error: 'خطأ', ok: 'تمت العملية', loading: 'جار التحميل…', hours: 'ساعات', pending: 'رسائل معلقة', deliveryRate: 'نسبة التسليم',
     mfaSetup: 'تفعيل التحقق بخطوتين', mfaSecret: 'سر TOTP (أدخله في تطبيق المصادقة)', mfaConfirm: 'تأكيد', mfaEnabled: 'التحقق مفعل', estimated: 'المبلغ التقديري',
     reconciled: 'المبلغ المطابق', file: 'ملف (CSV / XLSX)', from: 'من', to: 'إلى', simulate: 'محاكاة', msisdn: 'رقم الهاتف', keywords: 'الكلمات المفتاحية', replies: 'الردود',
-    regulatory: 'الموافقة التنظيمية', forbidden: 'صلاحيات غير كافية', mfaRequired: 'رمز التحقق مطلوب', mfaReconnect: 'تم تفعيل التحقق: سجل الدخول مجددا برمزك', badCreds: 'بيانات الدخول غير صحيحة',
+    regulatory: 'الموافقة التنظيمية', forbidden: 'صلاحيات غير كافية', mfaRequired: 'رمز التحقق مطلوب', devBanner: 'بيئة تجريبية — بيانات وهمية', devAccounts: 'تجريبي: admin / Admin-dev-pass1 · manager, noc, finance, finance2, support, auditor, club / Dev-pass-12345', mfaReconnect: 'تم تفعيل التحقق: سجل الدخول مجددا برمزك', badCreds: 'بيانات الدخول غير صحيحة',
   },
 };
 

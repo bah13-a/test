@@ -1,7 +1,10 @@
-# Profil DEV sans Docker : H2 en mémoire, simulateur de gateway, file en mémoire. NE JAMAIS utiliser en production.
+# ============================ PROFIL DEV : MOCKS, DONNÉES FICTIVES ============================
+# Démarrage sans aucune dépendance : H2 en mémoire, simulateur de gateway/SMSC (DLR automatiques), file mémoire,
+# quotas en mémoire, données de démonstration (opérateurs, short codes, services, tarifs, utilisateurs de chaque rôle).
+# NE JAMAIS utiliser avec des données réelles. Lancement : mvn spring-boot:run -Dspring-boot.run.profiles=dev
 spring:
   datasource:
-    url: jdbc:h2:mem:vasdev;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    url: jdbc:h2:mem:vasdev;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;DB_CLOSE_DELAY=-1
     username: sa
     password: ""
   autoconfigure:
@@ -15,13 +18,29 @@ management:
     rabbit: { enabled: false }
 vas:
   queue: memory
+  queue-async: true            # envoi MT asynchrone comme en production
   rate-limit: memory
-  token-secret: dev-token-secret-0123456789abcdef
-  mfa-enforced: false
+  mfa-enforced: false          # MFA possible mais non imposé en démonstration
   public-base-url: http://localhost:8080
-  jasmin: { simulator: true, password: dev }
-  callback: { shared-secret: dev-secret }
+  token-secret: dev-token-secret-0123456789abcdef
+  jasmin: { base-url: "mock", password: dev-jasmin-password, simulator: true }
+  callback: { shared-secret: dev-callback-secret }
   retry: { max-attempts: 3, backoff-seconds: 10 }
+  operators-sync: overwrite
+  retention: { messages-days: 0, audit-days: 0, webhook-days: 0, consent-days: 0 }
+  mock:
+    auto-dlr: true             # le simulateur renvoie un DLR après dlr-delay-ms
+    dlr-status: MIXED          # DELIVRD | UNDELIV | EXPIRED | MIXED (90 % livrés, 5 % UNDELIV, 5 % EXPIRED)
+    dlr-delay-ms: 400
+    seed: true                 # crée services, tarifs, partenaires, utilisateurs de démonstration
+    demo-traffic: true         # injecte quelques MO au démarrage pour alimenter les écrans
+    api-key: vas_dev_key_for_local_demo_only
+  # Préfixes et short codes FICTIFS de démonstration (en pro : valeurs réelles fournies par les opérateurs)
+  operators:
+    - { code: TT, name: Tunisie Telecom, msisdn-prefixes: "9,4", jasmin-connector: smppc_tt, dlr-billing-rule: ON_DELIVERED, max-tps: 50, short-codes: "85500,85503" }
+    - { code: ORANGE, name: Orange Tunisie, msisdn-prefixes: "5,7", jasmin-connector: smppc_orange, dlr-billing-rule: ON_DELIVERED, max-tps: 50, short-codes: "85501" }
+    - { code: OOREDOO, name: Ooredoo Tunisie, msisdn-prefixes: "2", jasmin-connector: smppc_ooredoo, dlr-billing-rule: ON_SUBMITTED, max-tps: 50, short-codes: "85502" }
+  # Compte administrateur de démonstration (les autres rôles sont créés par DevDataSeeder, mot de passe Dev-pass-12345)
   admin-users:
     - username: admin
       password-hash: "{noop}Admin-dev-pass1"

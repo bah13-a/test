@@ -26,14 +26,25 @@ public class AuthController {
     private final AuditService audit;
     private final Clock clock;
     private final String dummyHash;
+    private final org.springframework.core.env.Environment environment;
+    private final tn.vas.config.VasProperties props;
 
-    public AuthController(UserRepo users, PasswordEncoder encoder, TokenService tokens, AuditService audit, Clock clock) {
+    public AuthController(UserRepo users, PasswordEncoder encoder, TokenService tokens, AuditService audit, Clock clock,
+                          org.springframework.core.env.Environment environment, tn.vas.config.VasProperties props) {
+        this.environment = environment;
+        this.props = props;
         this.users = users;
         this.encoder = encoder;
         this.tokens = tokens;
         this.audit = audit;
         this.clock = clock;
         this.dummyHash = encoder.encode("dummy-password-for-timing");
+    }
+
+    /** Profil actif (public) : permet à l'interface d'afficher un bandeau « environnement de démonstration » en dev. */
+    @GetMapping("/env")
+    public Map<String, Object> env() {
+        return Map.of("profile", environment.acceptsProfiles(org.springframework.core.env.Profiles.of("dev")) ? "dev" : "pro", "mfaEnforced", props.mfaEnforced());
     }
 
     @PostMapping("/login")

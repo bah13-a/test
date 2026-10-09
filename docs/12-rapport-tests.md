@@ -8,17 +8,20 @@ Environnement d'exécution : conteneur de développement (JDK 21, PostgreSQL 16,
 |---|---|---|---|
 | `UnitTests` | 8 | OK | normalisation MSISDN, GSM-7/UCS-2 et segments, mapping DLR, répartition des revenus (somme exacte), signature webhook, **TOTP RFC 6238 (vecteur officiel)**, détection de langue, parsing CSV avec mapping |
 | `SmppSimulatorTests` | 5 | OK | vrai client SMPP v3.4 (jsmpp) ↔ simulateur SMSC : bind, mauvais mot de passe rejeté, submit_sm + DLR (`DELIVRD`/`UNDELIV`), injection MO, `ESME_RTHROTTLED`, coupure de lien + reconnexion |
+| `ProfileTests` | 6 | OK | `ProductionGuard` (accepte une bonne config, rejette mocks/secrets faibles/base H2/hash `{noop}`/hash admin absent), avertissements, `OperatorSync` (création, première synchro, back-office prioritaire ensuite, `overwrite`), purge de conservation (MT finaux seulement) |
+| `ProfileGuardTests` + `ProfileGuardVerifyTests` | 3 | OK | refus de démarrer sans profil, refus `dev`+`pro` |
+| `DevProfileTests` | 6 | OK | profil `dev` complet : données de démonstration, DLR automatiques → ledger `CHARGED`, un compte par rôle avec ses droits, clé API de démo, puits de webhook (signature + anti-rejeu), faux relevé opérateur |
 | `FlowTests` | 19 | OK | MO→MT→DLR→facturation, rejeu MO/DLR idempotent, mot-clé inconnu, STOP (et arabe), double opt-in, service réglementé bloqué, lien coupé + balayeur, MO arabe/UCS-2, listes noire/blanche, MFA (enrôlement, jeton, verrouillage), portail partenaire isolé + audit, rapprochement XLSX/CSV + exports PDF/XLSX/CSV, webhooks MO/DLR signés, scopes API, RBAC, approbation 4-yeux |
 | Front (`vitest`) | 3 | OK | complétude des traductions FR/AR/EN, bascule de langue |
 
-Total : **35 tests, 0 échec**.
+Total : **50 tests (47 Java + 3 front), 0 échec**.
 
 ## 2. Parcours navigateur (Chromium, `frontend/e2e/smoke.mjs`) sur PostgreSQL + Redis réels
 
 26 vérifications OK : rôle sensible redirigé vers l'enrôlement MFA, activation TOTP, reconnexion avec code, 4 MO simulés (dont arabe), navigation dans les 14 écrans administrateur sans erreur, recherche de messages, compte partenaire limité au portail (résultats par contenu), bascule arabe en RTL, aucune exception JavaScript.
 
 ## 3. Migrations et schéma
-Flyway V1-V5 appliquées sur PostgreSQL 16 réel avec `ddl-auto=validate` (mapping JPA conforme au schéma).
+Flyway V1-V6 appliquées sur PostgreSQL 16 réel avec `ddl-auto=validate` (mapping JPA conforme au schéma).
 
 ## 4. Test de charge (`tests/load/load.mjs`, 1 instance, PostgreSQL + Redis réels, 50 connexions)
 
@@ -34,3 +37,12 @@ Débit d'envoi MT : plafonné par `operator.max_tps` (50/s) - le backlog de 4 45
 
 ## 6. Non exécuté (à faire avant mise en service)
 Connexion à un SMSC opérateur réel et recette opérateur ; Jasmin réel (le gabarit `provision.sh` est validé en syntaxe et en rendu uniquement) ; RabbitMQ en cluster et bascule HA (topologie fournie, non démarrée ici faute de Docker) ; test d'intrusion ; test de charge à 200 SMS/s sur l'infrastructure cible.
+
+## 7. Profil `pro` démarré pour de vrai (PostgreSQL 16 + Redis réels)
+- Sans variables d'environnement : démarrage refusé (placeholders non résolus).
+- Avec secrets faibles / mocks / `{noop}` / `localhost` : démarrage refusé par `ProductionGuard`, liste complète des erreurs.
+- Avec une configuration valide : démarrage OK, opérateurs et short codes **créés depuis l'environnement** (TT : TPS 40, préfixes `9,4`, short codes 85500 et 85503 ; Orange : règle de facturation `ON_SUBMITTED`), **aucun service ni donnée de démonstration**, premier SUPER_ADMIN créé depuis un hash bcrypt, `/dev/*` et `/admin/sim/*` inaccessibles, connexion OK (MFA exigé pour les rôles sensibles).
+- Non démarré : RabbitMQ réel (file `rabbit`) - l'envoi de MT en `pro` nécessite le broker.
+
+## 8. Profil `dev` démarré et piloté dans Chromium
+Bandeau « environnement de démonstration », connexion avec un compte de démonstration, tableau de bord alimenté (17 MO routés, 16 MT livrés, 1 non livré, taux de livraison 94 %), ledger de 14 événements, aucune erreur JavaScript.

@@ -11,20 +11,32 @@ Opérateurs (SMPP v3.4, VPN) ⇄ Jasmin ⇄ callbacks HTTP ⇄ [ moteur VAS ] �
 ```
 La gateway ne contient aucune logique métier : l'interface `SmsGateway` la rend remplaçable (Kannel, autre).
 
-## Démarrage
+## Deux profils : `dev` (mocks) et `pro` (données réelles)
 
-| Mode | Commande | Contenu |
+L'application **exige un profil explicite** (sinon elle refuse de démarrer). Détail, checklist des informations externes et procédure : [`docs/13-profils-dev-pro.md`](docs/13-profils-dev-pro.md).
+
+| | `dev` - démonstration / tests | `pro` - production |
 |---|---|---|
-| **Démo sans Docker** | `cd frontend && npm ci && npm run build && cd .. && mvn spring-boot:run -Dspring-boot.run.profiles=dev` | H2 en mémoire, simulateur de gateway, file mémoire ; compte `admin` / `Admin-dev-pass1` ; UI sur `http://localhost:8080` |
-| **Stack complète** | `cp .env.example .env` (renseigner les secrets) puis `docker compose up -d --build` | Postgres, Redis, RabbitMQ, Jasmin, application, Prometheus, Grafana, Loki/Promtail |
-| **Simulateur SMSC** | `docker compose --profile sit up -d smpp-sim` | SMSC SMPP v3.4 auquel Jasmin peut se connecter (port 2776, contrôle HTTP 8081) |
-| **Haute disponibilité** | `docker compose -f docker-compose.yml -f infra/ha/docker-compose.ha.yml up -d` | topologie de référence (Patroni, RabbitMQ cluster, 2 instances) |
-| **Tests** | `mvn verify` puis `cd frontend && npm test` | 35 tests (voir `docs/12-rapport-tests.md`) |
-| **Parcours navigateur** | `frontend/e2e/smoke.mjs` | enrôlement MFA, 14 écrans, portail, arabe RTL |
-| **Charge** | `node tests/load/load.mjs 3000 50` (ou `tests/load/k6-mo-mt.js`) | objectifs CDC §12.1 |
+| Lancer | `cd frontend && npm ci && npm run build && cd .. && mvn spring-boot:run -Dspring-boot.run.profiles=dev` ou `docker compose -f docker-compose.dev.yml up --build` | `cp .env.pro.example .env` (tout renseigner) → `docker compose up -d --build` → `docker compose run --rm jasmin-provision` |
+| Dépendances | aucune (H2, file mémoire) | PostgreSQL, RabbitMQ, Redis, Jasmin, VPN opérateurs |
+| Gateway | **mock** avec DLR automatiques, panne simulable, faux relevé opérateur, puits de webhooks signés | **Jasmin réel** vers les SMSC des opérateurs |
+| Données | démonstration (opérateurs, short codes, services, tarifs, 1 compte par rôle, 24 MO simulés) | **aucune** donnée fictive ; opérateurs/short codes issus de `.env` |
+| Garde-fous | bandeau « démonstration » | `ProductionGuard` : refuse mocks, secrets faibles/d'exemple, MFA désactivé, base non PostgreSQL |
+| Comptes de démo | `admin / Admin-dev-pass1` ; `manager, noc, finance, finance2, support, auditor, club / Dev-pass-12345` | premier SUPER_ADMIN via `ADMIN_PASSWORD_HASH` |
+
+Autres commandes :
+
+| Besoin | Commande |
+|---|---|
+| Simulateur SMSC SMPP v3.4 (SIT) | `docker compose -f docker-compose.dev.yml --profile sit up -d smpp-sim` |
+| Haute disponibilité (référence) | `docker compose -f docker-compose.yml -f infra/ha/docker-compose.ha.yml up -d` |
+| Hash d'un mot de passe | `java -Dloader.main=tn.vas.tools.HashPassword -cp target/vas-platform-1.0.0.jar org.springframework.boot.loader.launch.PropertiesLauncher '...'` |
+| Tests | `mvn verify` puis `cd frontend && npm test` (50 tests, voir `docs/12-rapport-tests.md`) |
+| Parcours navigateur | `frontend/e2e/smoke.mjs` (enrôlement MFA, 14 écrans, portail, arabe RTL) |
+| Charge | `node tests/load/load.mjs 3000 50` ou `tests/load/k6-mo-mt.js` |
 
 Adresses : UI `/` · Swagger `/swagger-ui.html` (spec figée : `docs/openapi.json`) · Grafana `:3000` · Prometheus `:9090`.
-Provisionnement Jasmin : `infra/jasmin/provision.sh` (variables `TT_SMSC_HOST`, `TT_SYSTEM_ID`... ; `DRY_RUN=1` pour relire). Premier compte : `ADMIN_USER` / `ADMIN_PASSWORD_HASH` (`{bcrypt}...`).
+Provisionnement Jasmin : `infra/jasmin/provision.sh` (variables `TT_*`, `ORANGE_*`, `OOREDOO_*` du `.env` ; `DRY_RUN=1` pour relire sans appliquer).
 
 ## Ce qui est réalisé (par lot du CDC §2.1)
 

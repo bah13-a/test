@@ -2,11 +2,11 @@
 
 ## 1. Premier démarrage
 
-1. `cp .env.example .env` et renseigner **tous** les secrets (jamais commités).
-2. Générer le hash du mot de passe administrateur : `htpasswd -bnBC 10 "" 'MotDePasse-Fort-123' | tr -d ':\n'` puis préfixer par `{bcrypt}` dans `ADMIN_PASSWORD_HASH`. Idem pour `PROMETHEUS_PASSWORD_HASH` (compte de scraping, rôle NOC).
-3. `docker compose up -d --build`. Au premier démarrage (table `app_user` vide), les comptes `ADMIN_USER` et `prometheus` sont créés.
+1. `cp .env.pro.example .env` et renseigner **tous** les champs (checklist : `13-profils-dev-pro.md`) ; jamais commité.
+2. Générer le hash : `java -Dloader.main=tn.vas.tools.HashPassword -cp vas-platform-1.0.0.jar org.springframework.boot.loader.launch.PropertiesLauncher 'MotDePasse-Fort-123'` (sortie `{bcrypt}...`) à placer dans `ADMIN_PASSWORD_HASH`. Idem pour `PROMETHEUS_PASSWORD_HASH` (compte de scraping, rôle NOC).
+3. `docker compose up -d --build` (profil `pro`), puis `docker compose run --rm jasmin-provision`. Au premier démarrage (table `app_user` vide), les comptes `ADMIN_USER` et `prometheus` sont créés.
 4. Se connecter à `http(s)://<hôte>/`, **activer le MFA** (menu Sécurité) : obligatoire pour `SUPER_ADMIN` et `FINANCE` (sinon seules les pages d'enrôlement sont accessibles).
-5. Provisionner Jasmin pour chaque opérateur avec `infra/jasmin/provision.sh` (paramètres de l'Annexe B, voir `operateurs/fiche-parametrage-operateur.md`).
+5. Les opérateurs et short codes sont synchronisés depuis `.env` ; Jasmin est provisionné par `docker compose run --rm jasmin-provision` (fiche : `operateurs/fiche-parametrage-operateur.md`).
 
 ## 2. Rôles
 

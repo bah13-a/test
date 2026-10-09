@@ -9,3 +9,6 @@ frontend/e2e*.png
 frontend/e2e-*.png
 src/main/resources/static/
 docs/chiffrage/__pycache__/
+secrets/
+certs/
+.env

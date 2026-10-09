@@ -1,0 +1,81 @@
+# ============================ PROFIL PRO : DONNÉES RÉELLES ============================
+# Aucun mock. Tous les secrets viennent de l'environnement (voir .env.pro.example) et n'ont PAS de valeur par défaut :
+# une variable manquante fait échouer le démarrage. ProductionGuard refuse en plus les valeurs faibles ou de démonstration.
+# Lancement : SPRING_PROFILES_ACTIVE=pro (ajouter ",json" pour les logs JSON Loki).
+spring:
+  datasource:
+    url: ${DB_URL}                      # jdbc:postgresql://host:5432/vas
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+    hikari: { maximum-pool-size: 30, minimum-idle: 5, connection-timeout: 5000 }
+  rabbitmq:
+    host: ${RABBIT_HOST}
+    port: ${RABBIT_PORT:5672}
+    username: ${RABBIT_USER}
+    password: ${RABBIT_PASSWORD}
+    ssl: { enabled: "${RABBIT_SSL:false}" }
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+management:
+  endpoint:
+    health: { show-details: never }
+server:
+  forward-headers-strategy: framework   # derrière le reverse proxy TLS
+  tomcat: { max-threads: 200 }
+vas:
+  queue: rabbit
+  rate-limit: redis
+  mfa-enforced: true
+  public-base-url: ${VAS_PUBLIC_BASE_URL}   # URL de rappel des DLR vue par Jasmin (réseau interne), ex. http://app:8080
+  token-secret: ${TOKEN_SECRET}             # >= 32 caractères, identique sur toutes les instances
+  jasmin:
+    base-url: ${JASMIN_URL}
+    password: ${JASMIN_PASSWORD}
+    simulator: false
+  callback:
+    shared-secret: ${CALLBACK_SECRET}
+  retry:
+    max-attempts: ${MT_MAX_ATTEMPTS:5}
+    backoff-seconds: ${MT_RETRY_BACKOFF_SECONDS:30}
+  mo-dedup-seconds: ${MO_DEDUP_SECONDS:30}
+  operators-sync: ${OPERATORS_SYNC:create-only}   # create-only : crée ce qui manque ; overwrite : la configuration écrase la base
+  # Conservation des données (jours, 0 = pas de purge) : valeurs à arrêter avec le conseil juridique avant l'ouverture commerciale.
+  retention:
+    messages-days: ${RETENTION_MESSAGES_DAYS:0}
+    audit-days: ${RETENTION_AUDIT_DAYS:0}
+    webhook-days: ${RETENTION_WEBHOOK_DAYS:90}
+    consent-days: ${RETENTION_CONSENT_DAYS:0}
+  # Opérateurs réels : paramètres métier uniquement. Les identifiants SMPP restent dans Jasmin (infra/jasmin/provision.sh).
+  operators:
+    - code: TT
+      name: Tunisie Telecom
+      msisdn-prefixes: ${TT_MSISDN_PREFIXES:}
+      jasmin-connector: smppc_tt
+      dlr-billing-rule: ${TT_DLR_BILLING_RULE:ON_DELIVERED}
+      max-tps: ${TT_TPS:50}
+      short-codes: ${TT_SHORT_CODES:}
+    - code: ORANGE
+      name: Orange Tunisie
+      msisdn-prefixes: ${ORANGE_MSISDN_PREFIXES:}
+      jasmin-connector: smppc_orange
+      dlr-billing-rule: ${ORANGE_DLR_BILLING_RULE:ON_DELIVERED}
+      max-tps: ${ORANGE_TPS:50}
+      short-codes: ${ORANGE_SHORT_CODES:}
+    - code: OOREDOO
+      name: Ooredoo Tunisie
+      msisdn-prefixes: ${OOREDOO_MSISDN_PREFIXES:}
+      jasmin-connector: smppc_ooredoo
+      dlr-billing-rule: ${OOREDOO_DLR_BILLING_RULE:ON_DELIVERED}
+      max-tps: ${OOREDOO_TPS:50}
+      short-codes: ${OOREDOO_SHORT_CODES:}
+  # Comptes créés au PREMIER démarrage uniquement (table vide). Hash au format {bcrypt}$2a$... ; entrée sans hash ignorée.
+  admin-users:
+    - username: ${ADMIN_USER:admin}
+      password-hash: ${ADMIN_PASSWORD_HASH}
+      roles: [SUPER_ADMIN]
+    - username: prometheus
+      password-hash: ${PROMETHEUS_PASSWORD_HASH:}
+      roles: [NOC]

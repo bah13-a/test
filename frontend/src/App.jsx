@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, login as apiLogin, clearCreds } from './api.js';
 import { LANGS, getLang, setLang, t } from './i18n.js';
 import * as P from './pages.jsx';
@@ -31,7 +31,10 @@ export default function App() {
   const [form, setForm] = useState({ u: '', p: '', c: '' });
   const [err, setErr] = useState(null);
   const [needMfa, setNeedMfa] = useState(false);
+  const [env, setEnv] = useState('pro');
+  const [mfaEnforced, setMfaEnforced] = useState(true);
   const [, force] = useState(0);
+  useEffect(() => { fetch('/auth/env').then((r) => r.json()).then((j) => { setEnv(j.profile); setMfaEnforced(j.mfaEnforced !== false); }).catch(() => {}); }, []);
   const changeLang = (l) => { setLang(l); force((n) => n + 1); };
 
   const login = async (e) => {
@@ -43,7 +46,7 @@ export default function App() {
       setMe(m);
       // rôles sensibles sans MFA : enrôlement obligatoire avant tout autre écran
       const sensitive = m.roles.some((r) => ['SUPER_ADMIN', 'FINANCE'].includes(r));
-      setPage(m.roles.includes('PARTNER') ? 'portal' : sensitive && !m.mfaEnabled ? 'security' : 'dashboard');
+      setPage(m.roles.includes('PARTNER') ? 'portal' : sensitive && !m.mfaEnabled && mfaEnforced ? 'security' : 'dashboard');
       setForm({ u: '', p: '', c: '' });
     } catch (ex) {
       clearCreds();
@@ -51,6 +54,7 @@ export default function App() {
     }
   };
 
+  const banner = env === 'dev' && <div className="devbanner" role="note">{t('devBanner')}</div>;
   const header = (
     <header>
       <b>{t('app')}</b>
@@ -62,7 +66,7 @@ export default function App() {
   if (!me) {
     return (
       <>
-        {header}
+        {banner}{header}
         <main><form className="card login" onSubmit={login}>
           <h2>{t('login')}</h2>
           <label>{t('username')}<input autoComplete="username" value={form.u} onChange={(e) => setForm({ ...form, u: e.target.value })} required /></label>
@@ -71,6 +75,7 @@ export default function App() {
           <button className="btn">{t('login')}</button>
           <Flash error={err} />
           <button type="button" className="link" onClick={() => setNeedMfa(true)}>{t('totp')}</button>
+          {env === 'dev' && <p className="muted devhint">{t('devAccounts')}</p>}
         </form></main>
       </>
     );
@@ -81,7 +86,7 @@ export default function App() {
   const current = items.find((i) => i[0] === page) || items[0];
   return (
     <>
-      {header}
+      {banner}{header}
       <div className="layout">
         <nav>{items.map(([id, label]) => <button key={id} className={id === current[0] ? 'on' : ''} onClick={() => setPage(id)}>{t(label)}</button>)}</nav>
         <main><h2>{t(current[1])}</h2>{current[2]()}</main>

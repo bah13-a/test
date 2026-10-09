@@ -1,0 +1,17 @@
+# Pile PROFIL DEV : mocks et données de démonstration, aucun secret réel, aucune dépendance.
+#   docker compose -f docker-compose.dev.yml up --build            -> http://localhost:8080 (admin / Admin-dev-pass1)
+#   docker compose -f docker-compose.dev.yml --profile sit up      -> + simulateur SMSC SMPP v3.4 (port 2776, contrôle HTTP 8081)
+name: vas-dev
+services:
+  app:
+    build: .
+    environment: { SPRING_PROFILES_ACTIVE: dev }
+    ports: ["8080:8080"]
+  smpp-sim:
+    # Pour tester un vrai Jasmin contre un faux SMSC : connecteur smppc vers smpp-sim:2776 (system_id sim / password sim)
+    profiles: ["sit"]
+    image: eclipse-temurin:21-jre
+    command: ["java", "-Dloader.main=tn.vas.smppsim.SmppSimulator", "-cp", "/app/app.jar", "org.springframework.boot.loader.launch.PropertiesLauncher"]
+    environment: { SIM_SYSTEM_ID: sim, SIM_PASSWORD: sim, SIM_SMPP_PORT: "2776", SIM_CONTROL_PORT: "8081" }
+    volumes: ["./target/vas-platform-1.0.0.jar:/app/app.jar:ro"]
+    ports: ["2776:2776", "8081:8081"]

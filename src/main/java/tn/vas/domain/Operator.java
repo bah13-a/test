@@ -20,4 +20,5 @@ public class Operator {
     @Enumerated(EnumType.STRING) private DlrBillingRule dlrBillingRule = DlrBillingRule.ON_DELIVERED;
     private int maxTps = 50;
     private String status = "ACTIVE";
+    private boolean configApplied;
 }

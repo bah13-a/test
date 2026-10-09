@@ -1,0 +1,43 @@
+# Passerelle TLS (nginx). Variables d'environnement substituées par l'image (PUBLIC_HOSTNAME).
+limit_req_zone $binary_remote_addr zone=api:10m rate=30r/s;
+limit_req_zone $binary_remote_addr zone=login:10m rate=5r/m;
+
+server {
+  listen 80;
+  server_name ${PUBLIC_HOSTNAME};
+  return 301 https://$host$request_uri;
+}
+
+server {
+  listen 443 ssl;
+  http2 on;
+  server_name ${PUBLIC_HOSTNAME};
+  ssl_certificate     /etc/nginx/certs/fullchain.pem;
+  ssl_certificate_key /etc/nginx/certs/privkey.pem;
+  ssl_protocols TLSv1.2 TLSv1.3;
+  ssl_prefer_server_ciphers off;
+  add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+  client_max_body_size 25m;
+
+  # Jamais exposés à l'extérieur : callbacks Jasmin (réseau interne direct vers app:8080), supervision, puits de dev
+  location ~ ^/(callbacks|actuator|dev)(/|$) { return 404; }
+
+  location = /auth/login {
+    limit_req zone=login burst=5 nodelay;
+    proxy_pass http://app:8080;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 60s;
+  }
+  location / {
+    limit_req zone=api burst=100 nodelay;
+    proxy_pass http://app:8080;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 60s;
+  }
+}

@@ -62,6 +62,7 @@ public class UserService implements UserDetailsService {
 
     /** Création du premier SUPER_ADMIN depuis l'environnement (ADMIN_USER / ADMIN_PASSWORD_HASH) si la table est vide. */
     @EventListener(ApplicationReadyEvent.class)
+    @org.springframework.core.annotation.Order(5) // avant OperatorSync (10) et DevDataSeeder (100)
     @Transactional
     public void bootstrap() {
         if (users.count() > 0 || props.adminUsers() == null) return;

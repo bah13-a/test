@@ -28,3 +28,6 @@ input[type=checkbox] { min-width:0; }
 .login { max-width:360px; margin:60px auto; display:flex; flex-direction:column; gap:12px; }
 code { background:var(--bg); padding:2px 6px; border-radius:4px; word-break:break-all; }
 @media (max-width: 720px) { .layout { flex-direction:column; } nav { width:auto; flex-direction:row; flex-wrap:wrap; border-inline-end:0; border-bottom:1px solid var(--line); } }
+
+.devbanner { background:#b54708; color:#fff; text-align:center; padding:4px 8px; font-size:12px; font-weight:600; }
+.devhint { font-size:11px; }

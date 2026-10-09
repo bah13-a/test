@@ -17,8 +17,10 @@ public class SimulatorController {
     private final MoService mo;
     private final DlrService dlr;
     private final SimulatorGateway gw;
+    private final tn.vas.repo.Repos.LedgerRepo ledger;
 
-    public SimulatorController(MoService mo, DlrService dlr, SimulatorGateway gw) {
+    public SimulatorController(MoService mo, DlrService dlr, SimulatorGateway gw, tn.vas.repo.Repos.LedgerRepo ledger) {
+        this.ledger = ledger;
         this.mo = mo;
         this.dlr = dlr;
         this.gw = gw;
@@ -33,6 +35,29 @@ public class SimulatorController {
     @PostMapping("/dlr")
     public Map<String, Object> dlr(@RequestParam String cid, @RequestParam(defaultValue = "DELIVRD") String status) {
         return Map.of("changed", dlr.process(cid, status));
+    }
+
+    /**
+     * Génère un faux relevé de facturation opérateur (CSV id;montant;statut) à partir du ledger, avec des écarts volontaires
+     * (montant faux, ligne inconnue, doublon) pour essayer l'écran de rapprochement.
+     */
+    @GetMapping(value = "/statement", produces = "text/csv")
+    public String statement(@RequestParam(defaultValue = "TT") String operator, @RequestParam(defaultValue = "true") boolean mismatches) {
+        var sb = new StringBuilder("event_id;amount;status\n");
+        int n = 0;
+        String first = null;
+        for (var e : ledger.findAll()) {
+            if (!e.getOperator().getCode().equals(operator) || e.getBillingStatus() != tn.vas.domain.Enums.BillingStatus.CHARGED) continue;
+            var amount = mismatches && n == 1 ? e.getGrossAmount().add(new java.math.BigDecimal("0.100")) : e.getGrossAmount();
+            sb.append(e.getEventId()).append(';').append(amount).append(";CHARGED\n");
+            if (first == null) first = e.getEventId();
+            n++;
+        }
+        if (mismatches) {
+            sb.append("MT-inconnu-chez-nous;1.000;CHARGED\n");
+            if (first != null) sb.append(first).append(";0.500;CHARGED\n"); // doublon dans le relevé
+        }
+        return sb.toString();
     }
 
     @PostMapping("/link-down")

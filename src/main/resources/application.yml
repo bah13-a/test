@@ -1,23 +1,17 @@
+# Configuration COMMUNE. Les profils portent le reste :
+#   dev  -> mocks (H2, simulateur de gateway, file mémoire, données de démonstration)      : application-dev.yml
+#   pro  -> données réelles (PostgreSQL, RabbitMQ, Redis, Jasmin, secrets obligatoires)     : application-pro.yml
+#   test -> tests automatisés (src/test/resources)
+# Sans profil valide, l'application refuse de démarrer (ProfileGuard) : jamais de mock par accident en production.
 spring:
   application:
     name: vas-platform
-  datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/vas}
-    username: ${DB_USER:vas}
-    password: ${DB_PASSWORD:vas}
   jpa:
     hibernate:
       ddl-auto: validate
     open-in-view: false
   flyway:
     enabled: true
-  rabbitmq:
-    host: ${RABBIT_HOST:localhost}
-    username: ${RABBIT_USER:guest}
-    password: ${RABBIT_PASSWORD:guest}
-  data:
-    redis:
-      host: ${REDIS_HOST:localhost}
   servlet:
     multipart:
       max-file-size: 20MB
@@ -33,27 +27,7 @@ management:
         enabled: true
 
 vas:
-  queue: ${VAS_QUEUE:rabbit}            # rabbit | memory (dev/tests)
-  rate-limit: ${VAS_RATE_LIMIT:redis}   # redis | memory
-  public-base-url: ${VAS_PUBLIC_BASE_URL:http://vas-app:8080}
   mo-dedup-seconds: 30
-  token-secret: ${TOKEN_SECRET:}          # secret HMAC des jetons de session UI ; obligatoire en HA (partagé entre instances)
-  mfa-enforced: ${VAS_MFA_ENFORCED:true}   # MFA obligatoire pour SUPER_ADMIN et FINANCE
-  jasmin:
-    base-url: ${JASMIN_URL:http://jasmin:1401}
-    password: ${JASMIN_PASSWORD:change-me}
-    simulator: ${VAS_SIMULATOR:false}
-  callback:
-    shared-secret: ${CALLBACK_SECRET:change-me-callback}
   retry:
     max-attempts: 5
     backoff-seconds: 30
-  # Comptes back-office : mots de passe BCrypt fournis par l'environnement (jamais en clair dans le dépôt)
-  # Comptes créés au premier démarrage (table vide) ; hash au format {bcrypt}$2a$... Un compte vide est ignoré.
-  admin-users:
-    - username: ${ADMIN_USER:admin}
-      password-hash: ${ADMIN_PASSWORD_HASH:}
-      roles: [SUPER_ADMIN]
-    - username: prometheus
-      password-hash: ${PROMETHEUS_PASSWORD_HASH:}
-      roles: [NOC]
