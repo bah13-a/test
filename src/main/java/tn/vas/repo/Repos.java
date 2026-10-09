@@ -27,7 +27,8 @@ public final class Repos {
     }
 
     public interface KeywordRepo extends JpaRepository<Keyword, Long> {
-        @Query("select k from Keyword k where k.service.shortCode = :sc and upper(k.word) = upper(:word)")
+        // mots-clés stockés en majuscules (Locale.ROOT) : comparaison exacte, indépendante de la locale de la base (pas de upper() SQL)
+        @Query("select k from Keyword k where k.service.shortCode = :sc and k.word = :word")
         List<Keyword> findByShortCodeAndWord(@Param("sc") ShortCode sc, @Param("word") String word);
         List<Keyword> findByService(VasService service);
         @Query("select k from Keyword k where k.service.shortCode = :sc order by k.id")
@@ -46,9 +47,13 @@ public final class Repos {
         long countByServiceAndMsisdnAndOutcome(VasService s, String msisdn, Enums.MoOutcome outcome);
         @Query("select m.outcome, count(m) from MoMessage m where m.service = :s group by m.outcome")
         List<Object[]> countByOutcome(@Param("s") VasService s);
+        @Query("select m.content, count(m) from MoMessage m where m.service = :s and m.outcome = tn.vas.domain.Enums.MoOutcome.ROUTED group by m.content")
+        List<Object[]> resultsByContent(@Param("s") VasService s);
+        @Query("select m.outcome, count(m) from MoMessage m where m.receivedAt >= :from group by m.outcome")
+        List<Object[]> countByOutcomeSince(@Param("from") Instant from);
     }
 
-    public interface MtRepo extends JpaRepository<MtMessage, Long> {
+    public interface MtRepo extends JpaRepository<MtMessage, Long>, org.springframework.data.jpa.repository.JpaSpecificationExecutor<MtMessage> {
         Optional<MtMessage> findByCorrelationId(String id);
         long countByStatus(Enums.MtStatus status);
         Optional<MtMessage> findByApiClientIdAndClientRef(Long apiClientId, String clientRef);
@@ -58,6 +63,8 @@ public final class Repos {
         List<MtMessage> findByStatusAndCreatedAtBefore(Enums.MtStatus s, Instant before);
         @Query("select m.status, count(m) from MtMessage m where m.service = :s group by m.status")
         List<Object[]> countByStatus(@Param("s") VasService s);
+        @Query("select m.status, count(m) from MtMessage m where m.createdAt >= :from group by m.status")
+        List<Object[]> countByStatusSince(@Param("from") Instant from);
     }
 
     public interface MtHistoryRepo extends JpaRepository<MtStatusHistory, Long> {
@@ -78,6 +85,12 @@ public final class Repos {
     public interface LedgerRepo extends JpaRepository<LedgerEvent, Long> {
         Optional<LedgerEvent> findByEventId(String eventId);
         List<LedgerEvent> findByOperatorAndCreatedAtBetween(Operator o, Instant from, Instant to);
+        @Query("select e.billingStatus, sum(e.grossAmount), sum(e.partnerShare), sum(e.providerShare), count(e) from LedgerEvent e "
+                + "where e.service in :svcs group by e.billingStatus")
+        List<Object[]> totalsByStatus(@Param("svcs") List<VasService> svcs);
+        @Query("select e.billingStatus, sum(e.grossAmount), sum(e.partnerShare), sum(e.providerShare), count(e) from LedgerEvent e "
+                + "where e.createdAt >= :from group by e.billingStatus")
+        List<Object[]> totalsSince(@Param("from") Instant from);
     }
 
     public interface ReconRepo extends JpaRepository<ReconItem, Long> {
@@ -93,5 +106,23 @@ public final class Repos {
     public interface WebhookRepo extends JpaRepository<WebhookOutbox, Long> {
         List<WebhookOutbox> findByStatusAndNextAttemptAtBefore(String status, Instant before);
         boolean existsByEventId(String eventId);
+    }
+
+    public interface UserRepo extends JpaRepository<AppUser, Long> {
+        Optional<AppUser> findByUsername(String username);
+    }
+
+    public interface ReplyRepo extends JpaRepository<ServiceReply, Long> {
+        Optional<ServiceReply> findByServiceAndLangAndKind(VasService s, String lang, String kind);
+        List<ServiceReply> findByService(VasService s);
+    }
+
+    public interface RuleRepo extends JpaRepository<MsisdnRule, Long> {
+        @Query("select count(r) > 0 from MsisdnRule r where r.ruleType = 'BLACK' and r.msisdn = :m and (r.service is null or r.service = :s)")
+        boolean blacklisted(@Param("m") String msisdn, @Param("s") VasService s);
+        @Query("select count(r) from MsisdnRule r where r.ruleType = 'WHITE' and (r.service is null or r.service = :s)")
+        long whitelistSize(@Param("s") VasService s);
+        @Query("select count(r) > 0 from MsisdnRule r where r.ruleType = 'WHITE' and r.msisdn = :m and (r.service is null or r.service = :s)")
+        boolean whitelisted(@Param("m") String msisdn, @Param("s") VasService s);
     }
 }

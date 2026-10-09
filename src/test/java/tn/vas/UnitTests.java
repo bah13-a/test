@@ -56,4 +56,28 @@ class UnitTests {
         assertEquals(WebhookService.sign("k", "1.{}"), WebhookService.sign("k", "1.{}"));
         assertNotEquals(WebhookService.sign("k", "1.{}"), WebhookService.sign("k2", "1.{}"));
     }
+
+    @Test
+    void totpMatchesRfc6238Vector() {
+        // RFC 6238 annexe B : secret ASCII "12345678901234567890" (base32 GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ), T=59 s → 94287082 (6 chiffres : 287082)
+        assertEquals("287082", tn.vas.security.Totp.generate("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", 59 / 30));
+        assertTrue(tn.vas.security.Totp.verify("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", "287082", 59_000));
+        assertFalse(tn.vas.security.Totp.verify("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", "287082", 200_000));
+    }
+
+    @Test
+    void languageDetection() {
+        assertEquals("ar", Messages.detect("إلغاء", "fr"));
+        assertEquals("en", Messages.detect("help", "fr"));
+        assertEquals("fr", Messages.detect("vote a", "fr"));
+    }
+
+    @Test
+    void csvParsingWithMapping() throws Exception {
+        String csv = "ref;montant;etat\nMT-1;1,000;CHARGED\nMT-2;2.5;\n";
+        var rows = StatementParser.parse(new java.io.ByteArrayInputStream(csv.getBytes()), "r.csv", ';', new StatementParser.Mapping("ref", "montant", "etat"));
+        assertEquals(2, rows.size());
+        assertEquals(new BigDecimal("1.000"), rows.get(0).amount());
+        assertEquals("CHARGED", rows.get(1).status());
+    }
 }

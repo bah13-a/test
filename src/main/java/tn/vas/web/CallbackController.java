@@ -29,6 +29,9 @@ public class CallbackController {
             var outcome = mo.handle(connector, from, to, content, id);
             log.info("MO {} -> {}", id, outcome);
             return ResponseEntity.ok("ACK/Jasmin");
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            log.info("MO concurrent déjà enregistré (doublon) : {}", id);
+            return ResponseEntity.ok("ACK/Jasmin"); // la contrainte unique a neutralisé le doublon : ne pas rejouer
         } catch (IllegalArgumentException e) {
             log.warn("MO rejeté : {}", e.getMessage());
             return ResponseEntity.ok("ACK/Jasmin"); // données invalides : inutile de rejouer

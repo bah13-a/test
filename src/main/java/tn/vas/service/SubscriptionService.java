@@ -31,7 +31,7 @@ public class SubscriptionService {
         for (var s : subs.findByStatusAndNextRenewalAtBefore(SubStatus.ACTIVE, now)) {
             var svc = s.getService();
             mt.submit(new MtService.Request(svc.getShortCode().getOperator(), svc, s.getMsisdn(), svc.getShortCode().getNumber(),
-                    "Renouvellement de votre abonnement " + svc.getName() + ". STOP pour vous désabonner.",
+                    String.format(Messages.text(svc.getDefaultLang(), Messages.RENEWAL), svc.getName()),
                     Priority.CONFIRMATION, null, EventType.RENEWAL, null, null, Duration.ofHours(24)));
             s.setNextRenewalAt(now.plus(Duration.ofDays(30)));
             subs.save(s);
@@ -79,7 +79,7 @@ public class SubscriptionService {
         c.setAt(now);
         consents.save(c);
         mt.submit(new MtService.Request(svc.getShortCode().getOperator(), svc, msisdn, svc.getShortCode().getNumber(),
-                svc.getReplyOk() == null ? "Abonnement activé. STOP pour vous désabonner." : svc.getReplyOk(),
+                svc.getReplyOk() == null ? Messages.text(svc.getDefaultLang(), Messages.SUB_OK) : svc.getReplyOk(),
                 Priority.CONFIRMATION, null, EventType.SUBSCRIPTION, null, null, Duration.ofHours(24)));
         return sub;
     }

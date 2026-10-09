@@ -1,11 +1,5 @@
 package tn.vas.service;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.*;
 import org.springframework.stereotype.Service;
@@ -31,40 +25,32 @@ public class ReconciliationService {
     }
 
     @Transactional
-    public String reconcile(Operator op, InputStream csv, char sep, Instant from, Instant to) throws IOException {
+    public String reconcile(Operator op, List<StatementParser.Row> rows, Instant from, Instant to) {
         String batch = UUID.randomUUID().toString().substring(0, 8);
         Set<String> seen = new HashSet<>();
-        try (var r = new BufferedReader(new InputStreamReader(csv, StandardCharsets.UTF_8))) {
-            String line = r.readLine(); // en-tête
-            while ((line = r.readLine()) != null) {
-                if (line.isBlank()) continue;
-                String[] c = line.split(java.util.regex.Pattern.quote(String.valueOf(sep)), -1);
-                String eventId = c[0].trim();
-                BigDecimal amount = new BigDecimal(c[1].trim().replace(',', '.'));
-                String status = c.length > 2 ? c[2].trim().toUpperCase(Locale.ROOT) : "CHARGED";
-                var item = new ReconItem();
-                item.setBatchId(batch);
-                item.setOperator(op);
-                item.setEventId(eventId);
-                item.setOperatorAmount(amount);
-                if (!seen.add(eventId)) {
-                    item.setResult(ReconResult.AMOUNT_MISMATCH);
-                    item.setComment("duplicata dans le relevé opérateur");
+        for (var r : rows) {
+            var item = new ReconItem();
+            item.setBatchId(batch);
+            item.setOperator(op);
+            item.setEventId(r.eventId());
+            item.setOperatorAmount(r.amount());
+            if (!seen.add(r.eventId())) {
+                item.setResult(ReconResult.AMOUNT_MISMATCH);
+                item.setComment("duplicata dans le relevé opérateur");
+            } else {
+                var ev = ledger.findByEventId(r.eventId()).orElse(null);
+                if (ev == null) {
+                    item.setResult(ReconResult.MISSING_ON_PLATFORM);
                 } else {
-                    var ev = ledger.findByEventId(eventId).orElse(null);
-                    if (ev == null) {
-                        item.setResult(ReconResult.MISSING_ON_PLATFORM);
-                    } else {
-                        item.setPlatformAmount(ev.getGrossAmount());
-                        if (ev.getGrossAmount().compareTo(amount) != 0) item.setResult(ReconResult.AMOUNT_MISMATCH);
-                        else if (!ev.getBillingStatus().name().equals(status)) {
-                            item.setResult(ReconResult.STATUS_MISMATCH);
-                            item.setComment("plateforme=" + ev.getBillingStatus() + " opérateur=" + status);
-                        } else item.setResult(ReconResult.MATCHED);
-                    }
+                    item.setPlatformAmount(ev.getGrossAmount());
+                    if (ev.getGrossAmount().compareTo(r.amount()) != 0) item.setResult(ReconResult.AMOUNT_MISMATCH);
+                    else if (!ev.getBillingStatus().name().equals(r.status())) {
+                        item.setResult(ReconResult.STATUS_MISMATCH);
+                        item.setComment("plateforme=" + ev.getBillingStatus() + " opérateur=" + r.status());
+                    } else item.setResult(ReconResult.MATCHED);
                 }
-                recon.save(item);
             }
+            recon.save(item);
         }
         for (var ev : ledger.findByOperatorAndCreatedAtBetween(op, from, to)) {
             if (ev.getBillingStatus() == BillingStatus.CHARGED && !seen.contains(ev.getEventId())) {
@@ -77,7 +63,22 @@ public class ReconciliationService {
                 recon.save(item);
             }
         }
-        audit.log("RECONCILIATION_IMPORT", "operator:" + op.getCode(), "batch=" + batch);
+        audit.log("RECONCILIATION_IMPORT", "operator:" + op.getCode(), "batch=" + batch + " lignes=" + rows.size());
         return batch;
+    }
+
+    /** Correction manuelle d'un écart avec commentaire (journal de correction). */
+    @Transactional
+    public ReconItem comment(Long itemId, String comment, BillingStatus newStatus) {
+        var item = recon.findById(itemId).orElseThrow();
+        item.setComment(comment);
+        if (newStatus != null && item.getEventId() != null) {
+            ledger.findByEventId(item.getEventId()).ifPresent(e -> {
+                e.setBillingStatus(newStatus);
+                ledger.save(e);
+            });
+        }
+        audit.log("RECONCILIATION_CORRECTION", "recon:" + itemId, comment + (newStatus == null ? "" : " -> " + newStatus));
+        return recon.save(item);
     }
 }

@@ -1,0 +1,2901 @@
+{
+ "openapi": "3.0.1",
+ "info": {
+  "title": "OpenAPI definition",
+  "version": "v0"
+ },
+ "servers": [
+  {
+   "url": "http://localhost:18081",
+   "description": "Generated server url"
+  }
+ ],
+ "paths": {
+  "/callbacks/mo": {
+   "get": {
+    "tags": [
+     "callback-controller"
+    ],
+    "operationId": "mo",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "from",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "to",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "content",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "origin-connector",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "string"
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "callback-controller"
+    ],
+    "operationId": "mo_1",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "from",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "to",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "content",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "origin-connector",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "string"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/callbacks/dlr": {
+   "get": {
+    "tags": [
+     "callback-controller"
+    ],
+    "operationId": "dlr",
+    "parameters": [
+     {
+      "name": "cid",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "message_status",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "string"
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "callback-controller"
+    ],
+    "operationId": "dlr_1",
+    "parameters": [
+     {
+      "name": "cid",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "message_status",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "string"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/replies": {
+   "get": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "replies",
+    "parameters": [
+     {
+      "name": "serviceId",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "object"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "put": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "putReply",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ReplyReq"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/subscriptions": {
+   "post": {
+    "tags": [
+     "api-controller"
+    ],
+    "operationId": "subscribe",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/SubRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/messages": {
+   "post": {
+    "tags": [
+     "api-controller"
+    ],
+    "summary": "Demander l'envoi d'un MT (idempotent via clientRef)",
+    "operationId": "send",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/SendRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "$ref": "#/components/schemas/MessageView"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/users": {
+   "get": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "listUsers",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "object"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "createUser",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/UserReq"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/tariffs": {
+   "get": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "tariffs",
+    "parameters": [
+     {
+      "name": "serviceId",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "object"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "createTariff",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/TariffReq"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/tariffs/{id}/approve": {
+   "post": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "approveTariff",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/subscriptions/stop": {
+   "post": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "stop",
+    "parameters": [
+     {
+      "name": "msisdn",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "serviceId",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/admin/sim/mo": {
+   "post": {
+    "tags": [
+     "simulator-controller"
+    ],
+    "operationId": "mo_2",
+    "parameters": [
+     {
+      "name": "connector",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "from",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "to",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "content",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "id",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/sim/link-down": {
+   "post": {
+    "tags": [
+     "simulator-controller"
+    ],
+    "operationId": "linkDown",
+    "parameters": [
+     {
+      "name": "sends",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "format": "int32",
+       "default": 3
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/admin/sim/dlr": {
+   "post": {
+    "tags": [
+     "simulator-controller"
+    ],
+    "operationId": "dlr_2",
+    "parameters": [
+     {
+      "name": "cid",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "status",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "default": "DELIVRD"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/shortcodes": {
+   "get": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "shortCodes",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/ShortCode"
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "createShortCode",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ShortCodeReq"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "$ref": "#/components/schemas/ShortCode"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/shortcodes/{id}/{action}": {
+   "post": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "shortCodeStatus",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     },
+     {
+      "name": "action",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "$ref": "#/components/schemas/ShortCode"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/services": {
+   "get": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "services_2",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "object"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "createService",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ServiceReq"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/services/{id}/status/{status}": {
+   "post": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "setStatus",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     },
+     {
+      "name": "status",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "enum": [
+        "DRAFT",
+        "ACTIVE",
+        "SUSPENDED",
+        "CLOSED"
+       ]
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/services/{id}/regulatory-approval": {
+   "post": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "approveRegulatory",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/rules": {
+   "get": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "rules",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "object"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "addRule",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/RuleReq"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/reconciliation/{operatorCode}": {
+   "post": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "reconcile",
+    "parameters": [
+     {
+      "name": "operatorCode",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "separator",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "default": ";"
+      }
+     },
+     {
+      "name": "from",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "date-time"
+      }
+     },
+     {
+      "name": "to",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "date-time"
+      }
+     },
+     {
+      "name": "idColumn",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "default": "event_id"
+      }
+     },
+     {
+      "name": "amountColumn",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "default": "amount"
+      }
+     },
+     {
+      "name": "statusColumn",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "default": "status"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "multipart/form-data": {
+       "schema": {
+        "required": [
+         "file"
+        ],
+        "type": "object",
+        "properties": {
+         "file": {
+          "type": "string",
+          "format": "binary"
+         }
+        }
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/partners": {
+   "get": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "partners",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "object"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "createPartner",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PartnerReq"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/me/mfa/setup": {
+   "post": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "mfaSetup",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/me/mfa/confirm": {
+   "post": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "mfaConfirm",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/CodeReq"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/keywords": {
+   "get": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "keywords",
+    "parameters": [
+     {
+      "name": "serviceId",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "object"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "addKeyword",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/KeywordReq"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/api-clients": {
+   "get": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "apiClients",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "object"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "createApiClient",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ApiClientReq"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/users/{id}": {
+   "patch": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "patchUser",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     },
+     {
+      "name": "enc",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "$ref": "#/components/schemas/PasswordEncoder"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/UserPatch"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/services/{id}": {
+   "patch": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "updateService",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ServiceReq"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/reconciliation/items/{id}": {
+   "patch": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "correct",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/CorrectionReq"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/partners/{id}": {
+   "patch": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "patchPartner",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PartnerReq"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/operators/{id}": {
+   "patch": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "patchOperator",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/OperatorPatch"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "$ref": "#/components/schemas/Operator"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/portal/summary": {
+   "get": {
+    "tags": [
+     "portal-controller"
+    ],
+    "operationId": "summary",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/portal/services": {
+   "get": {
+    "tags": [
+     "portal-controller"
+    ],
+    "operationId": "services",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "object"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/portal/results": {
+   "get": {
+    "tags": [
+     "portal-controller"
+    ],
+    "operationId": "results",
+    "parameters": [
+     {
+      "name": "serviceId",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "object"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/portal/export": {
+   "get": {
+    "tags": [
+     "portal-controller"
+    ],
+    "operationId": "export",
+    "parameters": [
+     {
+      "name": "format",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "default": "csv"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "string",
+         "format": "byte"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/services": {
+   "get": {
+    "tags": [
+     "api-controller"
+    ],
+    "operationId": "services_1",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "object"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/reports": {
+   "get": {
+    "tags": [
+     "api-controller"
+    ],
+    "operationId": "reports",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "object"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/messages/{id}": {
+   "get": {
+    "tags": [
+     "api-controller"
+    ],
+    "operationId": "get",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "$ref": "#/components/schemas/MessageView"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/health": {
+   "get": {
+    "tags": [
+     "api-controller"
+    ],
+    "operationId": "health",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/tariffs/simulate": {
+   "get": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "simulate",
+    "parameters": [
+     {
+      "name": "gross",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "number"
+      }
+     },
+     {
+      "name": "tax",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "number"
+      }
+     },
+     {
+      "name": "operatorPercent",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "number"
+      }
+     },
+     {
+      "name": "partnerPercent",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "number",
+       "default": 0
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "$ref": "#/components/schemas/RevenueSplit"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/reports/summary/export": {
+   "get": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "summaryExport",
+    "parameters": [
+     {
+      "name": "format",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "default": "pdf"
+      }
+     },
+     {
+      "name": "hours",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "format": "int32",
+       "default": 24
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "string",
+         "format": "byte"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/reconciliation/{batch}": {
+   "get": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "reconItems",
+    "parameters": [
+     {
+      "name": "batch",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "result",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "enum": [
+        "MATCHED",
+        "AMOUNT_MISMATCH",
+        "MISSING_ON_PLATFORM",
+        "MISSING_ON_OPERATOR",
+        "STATUS_MISMATCH"
+       ]
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "object"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/reconciliation/{batch}/export": {
+   "get": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "reconExport",
+    "parameters": [
+     {
+      "name": "batch",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "format",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "default": "csv"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "string",
+         "format": "byte"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/operators": {
+   "get": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "operators",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/Operator"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/messages": {
+   "get": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "messages",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "msisdn",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "operator",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "shortCode",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "status",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "enum": [
+        "PENDING",
+        "SUBMITTED",
+        "DELIVERED",
+        "EXPIRED",
+        "UNDELIVERABLE",
+        "REJECTED",
+        "UNKNOWN",
+        "FAILED"
+       ]
+      }
+     },
+     {
+      "name": "from",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "format": "date-time"
+      }
+     },
+     {
+      "name": "to",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "format": "date-time"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "object"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/me": {
+   "get": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "me",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/ledger": {
+   "get": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "ledger",
+    "parameters": [
+     {
+      "name": "status",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "enum": [
+        "PENDING",
+        "ACCEPTED",
+        "CHARGED",
+        "REJECTED",
+        "REVERSED",
+        "DISPUTED"
+       ]
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "object"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/ledger/export": {
+   "get": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "ledgerExport",
+    "parameters": [
+     {
+      "name": "format",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "default": "csv"
+      }
+     },
+     {
+      "name": "status",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "enum": [
+        "PENDING",
+        "ACCEPTED",
+        "CHARGED",
+        "REJECTED",
+        "REVERSED",
+        "DISPUTED"
+       ]
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "string",
+         "format": "byte"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/dashboard": {
+   "get": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "dashboard",
+    "parameters": [
+     {
+      "name": "hours",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "format": "int32",
+       "default": 24
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/consents": {
+   "get": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "consents",
+    "parameters": [
+     {
+      "name": "msisdn",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "serviceId",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "object"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/consents/export": {
+   "get": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "consentsExport",
+    "parameters": [
+     {
+      "name": "msisdn",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "serviceId",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "text/csv": {
+        "schema": {
+         "type": "string",
+         "format": "byte"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/audit": {
+   "get": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "audit",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/AuditLog"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/subscriptions/{id}": {
+   "delete": {
+    "tags": [
+     "api-controller"
+    ],
+    "operationId": "unsubscribe",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/admin/rules/{id}": {
+   "delete": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "deleteRule",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/admin/keywords/{id}": {
+   "delete": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "deleteKeyword",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/admin/api-clients/{id}": {
+   "delete": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "revokeApiClient",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  }
+ },
+ "components": {
+  "schemas": {
+   "ReplyReq": {
+    "type": "object",
+    "properties": {
+     "serviceId": {
+      "type": "integer",
+      "format": "int64"
+     },
+     "lang": {
+      "type": "string"
+     },
+     "kind": {
+      "type": "string"
+     },
+     "text": {
+      "type": "string"
+     }
+    }
+   },
+   "SubRequest": {
+    "required": [
+     "consentProof",
+     "msisdn",
+     "serviceId"
+    ],
+    "type": "object",
+    "properties": {
+     "msisdn": {
+      "type": "string"
+     },
+     "serviceId": {
+      "type": "integer",
+      "format": "int64"
+     },
+     "consentProof": {
+      "type": "string"
+     }
+    }
+   },
+   "SendRequest": {
+    "required": [
+     "text",
+     "to"
+    ],
+    "type": "object",
+    "properties": {
+     "to": {
+      "type": "string"
+     },
+     "text": {
+      "type": "string"
+     },
+     "sender": {
+      "type": "string"
+     },
+     "serviceId": {
+      "type": "integer",
+      "format": "int64"
+     },
+     "operator": {
+      "type": "string"
+     },
+     "priority": {
+      "type": "string",
+      "enum": [
+       "TRANSACTIONAL",
+       "CONFIRMATION",
+       "BULK"
+      ]
+     },
+     "clientRef": {
+      "type": "string"
+     }
+    }
+   },
+   "MessageView": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "clientRef": {
+      "type": "string"
+     },
+     "to": {
+      "type": "string"
+     },
+     "status": {
+      "type": "string"
+     },
+     "rawStatus": {
+      "type": "string"
+     },
+     "segments": {
+      "type": "integer",
+      "format": "int32"
+     },
+     "encoding": {
+      "type": "string"
+     },
+     "history": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "additionalProperties": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   },
+   "UserReq": {
+    "type": "object",
+    "properties": {
+     "username": {
+      "type": "string"
+     },
+     "password": {
+      "type": "string"
+     },
+     "roles": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "partnerId": {
+      "type": "integer",
+      "format": "int64"
+     }
+    }
+   },
+   "TariffReq": {
+    "type": "object",
+    "properties": {
+     "serviceId": {
+      "type": "integer",
+      "format": "int64"
+     },
+     "eventType": {
+      "type": "string",
+      "enum": [
+       "MO",
+       "MT",
+       "SUBSCRIPTION",
+       "RENEWAL",
+       "ADJUSTMENT"
+      ]
+     },
+     "grossAmount": {
+      "type": "number"
+     },
+     "operatorPercent": {
+      "type": "number"
+     },
+     "taxPercent": {
+      "type": "number"
+     },
+     "effectiveFrom": {
+      "type": "string",
+      "format": "date-time"
+     }
+    }
+   },
+   "ShortCodeReq": {
+    "type": "object",
+    "properties": {
+     "number": {
+      "type": "string"
+     },
+     "operatorCode": {
+      "type": "string"
+     },
+     "validFrom": {
+      "type": "string",
+      "format": "date-time"
+     },
+     "validTo": {
+      "type": "string",
+      "format": "date-time"
+     }
+    }
+   },
+   "Operator": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "integer",
+      "format": "int64"
+     },
+     "code": {
+      "type": "string"
+     },
+     "name": {
+      "type": "string"
+     },
+     "msisdnPrefixes": {
+      "type": "string"
+     },
+     "jasminConnector": {
+      "type": "string"
+     },
+     "dlrBillingRule": {
+      "type": "string",
+      "enum": [
+       "ON_SUBMITTED",
+       "ON_DELIVERED"
+      ]
+     },
+     "maxTps": {
+      "type": "integer",
+      "format": "int32"
+     },
+     "status": {
+      "type": "string"
+     }
+    }
+   },
+   "ShortCode": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "integer",
+      "format": "int64"
+     },
+     "number": {
+      "type": "string"
+     },
+     "operator": {
+      "$ref": "#/components/schemas/Operator"
+     },
+     "validFrom": {
+      "type": "string",
+      "format": "date-time"
+     },
+     "validTo": {
+      "type": "string",
+      "format": "date-time"
+     },
+     "status": {
+      "type": "string"
+     }
+    }
+   },
+   "ServiceReq": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "type": {
+      "type": "string",
+      "enum": [
+       "VOTE",
+       "QUIZ",
+       "PREMIUM_CONTENT",
+       "SUBSCRIPTION",
+       "ALERT"
+      ]
+     },
+     "partnerId": {
+      "type": "integer",
+      "format": "int64"
+     },
+     "shortCodeId": {
+      "type": "integer",
+      "format": "int64"
+     },
+     "regulated": {
+      "type": "boolean"
+     },
+     "consentMode": {
+      "type": "string",
+      "enum": [
+       "SIMPLE_OPT_IN",
+       "DOUBLE_OPT_IN",
+       "API_ACTIVATION"
+      ]
+     },
+     "opensAt": {
+      "type": "string",
+      "format": "date-time"
+     },
+     "closesAt": {
+      "type": "string",
+      "format": "date-time"
+     },
+     "maxActionsPerMsisdn": {
+      "type": "integer",
+      "format": "int32"
+     },
+     "defaultLang": {
+      "type": "string"
+     },
+     "replyOk": {
+      "type": "string"
+     },
+     "replyStop": {
+      "type": "string"
+     },
+     "replyHelp": {
+      "type": "string"
+     },
+     "replyLimit": {
+      "type": "string"
+     },
+     "replyClosed": {
+      "type": "string"
+     }
+    }
+   },
+   "RuleReq": {
+    "type": "object",
+    "properties": {
+     "msisdn": {
+      "type": "string"
+     },
+     "serviceId": {
+      "type": "integer",
+      "format": "int64"
+     },
+     "type": {
+      "type": "string"
+     },
+     "reason": {
+      "type": "string"
+     }
+    }
+   },
+   "PartnerReq": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "sharePercent": {
+      "type": "number"
+     },
+     "webhookUrl": {
+      "type": "string"
+     },
+     "webhookSecret": {
+      "type": "string"
+     }
+    }
+   },
+   "CodeReq": {
+    "type": "object",
+    "properties": {
+     "code": {
+      "type": "string"
+     }
+    }
+   },
+   "KeywordReq": {
+    "type": "object",
+    "properties": {
+     "serviceId": {
+      "type": "integer",
+      "format": "int64"
+     },
+     "word": {
+      "type": "string"
+     }
+    }
+   },
+   "ApiClientReq": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "partnerId": {
+      "type": "integer",
+      "format": "int64"
+     },
+     "scopes": {
+      "type": "string"
+     },
+     "rateLimitPerMin": {
+      "type": "integer",
+      "format": "int32"
+     }
+    }
+   },
+   "UserPatch": {
+    "type": "object",
+    "properties": {
+     "roles": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "active": {
+      "type": "boolean"
+     },
+     "resetMfa": {
+      "type": "boolean"
+     },
+     "password": {
+      "type": "string"
+     }
+    }
+   },
+   "PasswordEncoder": {
+    "type": "object"
+   },
+   "CorrectionReq": {
+    "type": "object",
+    "properties": {
+     "comment": {
+      "type": "string"
+     },
+     "newStatus": {
+      "type": "string",
+      "enum": [
+       "PENDING",
+       "ACCEPTED",
+       "CHARGED",
+       "REJECTED",
+       "REVERSED",
+       "DISPUTED"
+      ]
+     }
+    }
+   },
+   "OperatorPatch": {
+    "type": "object",
+    "properties": {
+     "maxTps": {
+      "type": "integer",
+      "format": "int32"
+     },
+     "status": {
+      "type": "string"
+     },
+     "msisdnPrefixes": {
+      "type": "string"
+     },
+     "dlrBillingRule": {
+      "type": "string",
+      "enum": [
+       "ON_SUBMITTED",
+       "ON_DELIVERED"
+      ]
+     }
+    }
+   },
+   "RevenueSplit": {
+    "type": "object",
+    "properties": {
+     "gross": {
+      "type": "number"
+     },
+     "taxes": {
+      "type": "number"
+     },
+     "operatorShare": {
+      "type": "number"
+     },
+     "partnerShare": {
+      "type": "number"
+     },
+     "providerShare": {
+      "type": "number"
+     }
+    }
+   },
+   "AuditLog": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "integer",
+      "format": "int64"
+     },
+     "actor": {
+      "type": "string"
+     },
+     "action": {
+      "type": "string"
+     },
+     "target": {
+      "type": "string"
+     },
+     "detail": {
+      "type": "string"
+     },
+     "at": {
+      "type": "string",
+      "format": "date-time"
+     }
+    }
+   }
+  }
+ }
+}

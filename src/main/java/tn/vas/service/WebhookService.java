@@ -68,6 +68,35 @@ public class WebhookService {
         outbox.save(o);
     }
 
+    /** MO-006 : notifie le webhook du partenaire propriétaire du service après routage d'un MO. */
+    @Transactional
+    public void enqueueMo(tn.vas.domain.MoMessage mo, tn.vas.domain.VasService svc) {
+        var partner = svc.getPartner();
+        if (partner == null || partner.getWebhookUrl() == null || partner.getWebhookUrl().isBlank() || mo.getId() == null) return;
+        String eventId = "MO-" + mo.getId();
+        if (outbox.existsByEventId(eventId)) return;
+        var body = new LinkedHashMap<String, Object>();
+        body.put("event_id", eventId);
+        body.put("type", "MO");
+        body.put("service_id", svc.getId());
+        body.put("msisdn", mo.getMsisdn());
+        body.put("short_code", mo.getShortCode());
+        body.put("content", mo.getContent());
+        body.put("received_at", mo.getReceivedAt().toString());
+        var o = new WebhookOutbox();
+        o.setEventId(eventId);
+        o.setUrl(partner.getWebhookUrl());
+        o.setSecret(partner.getWebhookSecret());
+        try {
+            o.setPayload(json.writeValueAsString(body));
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+        o.setStatus("PENDING");
+        o.setNextAttemptAt(clock.instant());
+        outbox.save(o);
+    }
+
     @Scheduled(fixedDelayString = "${vas.webhook-interval-ms:5000}")
     public void deliver() {
         for (var o : outbox.findByStatusAndNextAttemptAtBefore("PENDING", clock.instant())) {

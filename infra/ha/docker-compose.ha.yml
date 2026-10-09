@@ -1,0 +1,68 @@
+# Topologie HA de RÉFÉRENCE (CDC §12.2) : à valider sur la préproduction avant usage. Aucun SPOF :
+#  - 2 instances applicatives derrière HAProxy (active/active, état en base)
+#  - PostgreSQL : Patroni (Spilo) 2 nœuds + etcd, bascule automatique ; HAProxy route vers le primaire
+#  - RabbitMQ : cluster 3 nœuds, files quorum répliquées (déjà déclarées quorum par l'application)
+#  - Redis : primaire + réplica + Sentinel (utilisé pour les quotas : dégradation tolérée si indisponible)
+#  - Jasmin : paire active/passive (état dans Redis/RabbitMQ), bascule via IP virtuelle (keepalived) côté opérateurs
+# Usage : docker compose -f docker-compose.yml -f infra/ha/docker-compose.ha.yml up -d
+services:
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.15
+    command: etcd --name etcd --data-dir /etcd-data --listen-client-urls http://0.0.0.0:2379 --advertise-client-urls http://etcd:2379
+  pg1: &pg
+    image: ghcr.io/zalando/spilo-16:3.3-p1
+    environment: &pgenv
+      SCOPE: vas
+      ETCD3_HOST: etcd:2379
+      PGUSER_SUPERUSER: postgres
+      PGPASSWORD_SUPERUSER: "${DB_SUPERUSER_PASSWORD:?}"
+      PGPASSWORD_ADMIN: "${DB_SUPERUSER_PASSWORD:?}"
+      PGPASSWORD_STANDBY: "${DB_REPLICATION_PASSWORD:?}"
+      SPILO_CONFIGURATION: |
+        bootstrap:
+          dcs:
+            synchronous_mode: true          # RPO ≈ 0 sur bascule
+            postgresql:
+              parameters: { archive_mode: "on", archive_command: "/bin/true", wal_level: replica }
+          initdb: [{ encoding: UTF8 }]
+          post_init: /bin/true
+    volumes: ["pg1:/home/postgres/pgdata"]
+    depends_on: [etcd]
+  pg2:
+    <<: *pg
+    volumes: ["pg2:/home/postgres/pgdata"]
+  haproxy-db:
+    image: haproxy:3.0
+    volumes: ["./infra/ha/haproxy-db.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro"]
+    depends_on: [pg1, pg2]
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    hostname: rabbit1
+    environment: &rmq { RABBITMQ_ERLANG_COOKIE: "${RABBIT_COOKIE:?}", RABBITMQ_DEFAULT_USER: vas, RABBITMQ_DEFAULT_PASS: "${RABBIT_PASSWORD}" }
+  rabbitmq2:
+    image: rabbitmq:3.13-management
+    hostname: rabbit2
+    environment: *rmq
+    # puis : docker compose exec rabbitmq2 rabbitmqctl stop_app && rabbitmqctl join_cluster rabbit@rabbit1 && rabbitmqctl start_app
+  rabbitmq3:
+    image: rabbitmq:3.13-management
+    hostname: rabbit3
+    environment: *rmq
+  redis-replica:
+    image: redis:7.2.2
+    command: ["redis-server", "--appendonly", "yes", "--replicaof", "redis", "6379"]
+  redis-sentinel:
+    image: redis:7.2.2
+    command: ["sh", "-c", "printf 'sentinel monitor vas redis 6379 1\\nsentinel down-after-milliseconds vas 5000\\nsentinel failover-timeout vas 15000\\n' > /tmp/s.conf && redis-sentinel /tmp/s.conf"]
+  app:
+    environment:
+      DB_URL: jdbc:postgresql://haproxy-db:5000/vas?targetServerType=primary
+      RABBIT_HOST: rabbitmq
+    deploy: { replicas: 2 }
+    ports: []
+  lb:
+    image: haproxy:3.0
+    volumes: ["./infra/ha/haproxy-app.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro"]
+    ports: ["8080:8080"]
+    depends_on: [app]
+volumes: { pg1: {}, pg2: {} }

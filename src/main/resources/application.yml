@@ -37,6 +37,8 @@ vas:
   rate-limit: ${VAS_RATE_LIMIT:redis}   # redis | memory
   public-base-url: ${VAS_PUBLIC_BASE_URL:http://vas-app:8080}
   mo-dedup-seconds: 30
+  token-secret: ${TOKEN_SECRET:}          # secret HMAC des jetons de session UI ; obligatoire en HA (partagé entre instances)
+  mfa-enforced: ${VAS_MFA_ENFORCED:true}   # MFA obligatoire pour SUPER_ADMIN et FINANCE
   jasmin:
     base-url: ${JASMIN_URL:http://jasmin:1401}
     password: ${JASMIN_PASSWORD:change-me}
@@ -47,7 +49,11 @@ vas:
     max-attempts: 5
     backoff-seconds: 30
   # Comptes back-office : mots de passe BCrypt fournis par l'environnement (jamais en clair dans le dépôt)
+  # Comptes créés au premier démarrage (table vide) ; hash au format {bcrypt}$2a$... Un compte vide est ignoré.
   admin-users:
     - username: ${ADMIN_USER:admin}
       password-hash: ${ADMIN_PASSWORD_HASH:}
       roles: [SUPER_ADMIN]
+    - username: prometheus
+      password-hash: ${PROMETHEUS_PASSWORD_HASH:}
+      roles: [NOC]

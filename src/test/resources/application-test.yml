@@ -19,6 +19,8 @@ vas:
   rate-limit: memory
   public-base-url: http://localhost
   mo-dedup-seconds: 30
+  token-secret: test-token-secret-0123456789abcdef
+  mfa-enforced: false
   jasmin:
     simulator: true
   callback:
@@ -26,13 +28,3 @@ vas:
   retry:
     max-attempts: 3
     backoff-seconds: 0
-  admin-users:
-    - username: admin
-      password-hash: "{noop}admin"
-      roles: [SUPER_ADMIN]
-    - username: finance
-      password-hash: "{noop}finance"
-      roles: [FINANCE]
-    - username: finance2
-      password-hash: "{noop}finance2"
-      roles: [FINANCE]

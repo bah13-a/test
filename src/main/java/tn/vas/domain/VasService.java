@@ -29,4 +29,5 @@ public class VasService {
     private String replyHelp;
     private String replyLimit;
     private String replyClosed;
+    private String defaultLang = "fr";
 }

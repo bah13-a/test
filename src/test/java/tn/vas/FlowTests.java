@@ -42,6 +42,11 @@ class FlowTests {
     @Autowired SimulatorGateway sim;
     @Autowired MtSweeper sweeper;
     @Autowired SubscriptionService subscriptionService;
+    @Autowired tn.vas.security.UserService userService;
+    @Autowired UserRepo userRepo;
+    @Autowired ReplyRepo replies;
+    @Autowired RuleRepo rules;
+    static final String PW = "Passw0rd-long-1";
 
     Operator tt;
     ShortCode sc;
@@ -49,8 +54,15 @@ class FlowTests {
     VasService abo;
     String sn;           // préfixe unique par test (isolation sans nettoyage de base)
 
+    void user(String name, String role, Partner partner) {
+        if (userRepo.findByUsername(name).isEmpty()) userService.create(name, PW, java.util.List.of(role), partner);
+    }
+
     @BeforeEach
     void setup() {
+        user("admin", "SUPER_ADMIN", null);
+        user("finance", "FINANCE", null);
+        user("finance2", "FINANCE", null);
         sn = String.valueOf(10000 + (int) (Math.random() * 89999));
         tt = operators.findByCode("TT").orElseThrow();
         sc = new ShortCode();
@@ -250,20 +262,204 @@ class FlowTests {
     @Test
     void adminRbacAndFourEyesTariff() throws Exception {
         mvc.perform(get("/admin/operators")).andExpect(status().isUnauthorized());
-        mvc.perform(get("/admin/audit").with(httpBasic("finance", "finance"))).andExpect(status().isForbidden());
-        mvc.perform(get("/admin/audit").with(httpBasic("admin", "admin"))).andExpect(status().isOk());
+        mvc.perform(get("/admin/audit").with(httpBasic("finance", PW))).andExpect(status().isForbidden());
+        mvc.perform(get("/admin/audit").with(httpBasic("admin", PW))).andExpect(status().isOk());
 
         String json = "{\"serviceId\":" + vote.getId() + ",\"eventType\":\"MT\",\"grossAmount\":0.5,\"operatorPercent\":40,\"taxPercent\":19}";
-        var res = mvc.perform(post("/admin/tariffs").with(httpBasic("finance", "finance"))
+        var res = mvc.perform(post("/admin/tariffs").with(httpBasic("finance", PW))
                 .contentType(MediaType.APPLICATION_JSON).content(json)).andExpect(status().isOk()).andReturn();
         String id = new com.fasterxml.jackson.databind.ObjectMapper().readTree(res.getResponse().getContentAsString()).get("id").asText();
-        mvc.perform(post("/admin/tariffs/" + id + "/approve").with(httpBasic("finance", "finance"))).andExpect(status().isForbidden());
-        mvc.perform(post("/admin/tariffs/" + id + "/approve").with(httpBasic("finance2", "finance2"))).andExpect(status().isOk());
+        mvc.perform(post("/admin/tariffs/" + id + "/approve").with(httpBasic("finance", PW))).andExpect(status().isForbidden());
+        mvc.perform(post("/admin/tariffs/" + id + "/approve").with(httpBasic("finance2", PW))).andExpect(status().isOk());
     }
 
     Partner partner(String n) {
         var p = new Partner();
         p.setName(n);
         return p;
+    }
+
+    @Test
+    void arabicMoGetsArabicReply() throws Exception {
+        String from = msisdn();
+        var rep = new ServiceReply();
+        rep.setService(vote); rep.setLang("ar"); rep.setKind("OK"); rep.setText("شكرا لتصويتك");
+        replies.save(rep);
+        mo(UUID.randomUUID().toString(), from, "VOTE أ");
+        var m = lastMt("+216" + from);
+        assertEquals("شكرا لتصويتك", m.getContent());
+        assertEquals("UCS2", m.getEncoding());
+        // sans surcharge, le catalogue système répond en arabe pour un STOP arabe
+        String from2 = msisdn();
+        mo(UUID.randomUUID().toString(), from2, "ABO");
+        mo(UUID.randomUUID().toString(), from2, "إلغاء");
+        assertTrue(lastMt("+216" + from2).getContent().contains("تم إلغاء"));
+    }
+
+    @Test
+    void blacklistBlocksAndWhitelistRestricts() throws Exception {
+        String from = msisdn();
+        var r = new MsisdnRule();
+        r.setMsisdn("+216" + from); r.setRuleType("BLACK"); r.setService(vote); r.setCreatedAt(Instant.now());
+        rules.save(r);
+        mo(UUID.randomUUID().toString(), from, "VOTE A");
+        assertTrue(mts.findTop100ByMsisdnOrderByCreatedAtDesc("+216" + from).isEmpty());
+        // liste blanche : seuls les numéros listés passent
+        String friend = msisdn();
+        var w = new MsisdnRule();
+        w.setMsisdn("+216" + friend); w.setRuleType("WHITE"); w.setService(vote); w.setCreatedAt(Instant.now());
+        rules.save(w);
+        String other = msisdn();
+        mo(UUID.randomUUID().toString(), other, "VOTE A");
+        assertTrue(mts.findTop100ByMsisdnOrderByCreatedAtDesc("+216" + other).isEmpty());
+        mo(UUID.randomUUID().toString(), friend, "VOTE A");
+        assertEquals(1, mts.findTop100ByMsisdnOrderByCreatedAtDesc("+216" + friend).size());
+    }
+
+    @Test
+    void mfaEnrollmentAndEnforcement() throws Exception {
+        user("mfauser", "SUPPORT", null);
+        var basic = httpBasic("mfauser", PW);
+        mvc.perform(post("/admin/me/mfa/setup").with(basic)).andExpect(status().isOk());
+        String secret = userRepo.findByUsername("mfauser").orElseThrow().getTotpSecret();
+        String code = tn.vas.security.Totp.generate(secret, System.currentTimeMillis() / 30000);
+        mvc.perform(post("/admin/me/mfa/confirm").with(basic).contentType(MediaType.APPLICATION_JSON).content("{\"code\":\"000000\"}"))
+                .andExpect(status().isUnprocessableEntity());
+        mvc.perform(post("/admin/me/mfa/confirm").with(basic).contentType(MediaType.APPLICATION_JSON).content("{\"code\":\"" + code + "\"}"))
+                .andExpect(status().isOk());
+        // MFA actif : mot de passe seul refusé, avec code TOTP accepté
+        mvc.perform(get("/admin/operators").with(basic)).andExpect(status().isUnauthorized()).andExpect(header().string("X-MFA-Required", "true"));
+        String code2 = tn.vas.security.Totp.generate(secret, System.currentTimeMillis() / 30000);
+        mvc.perform(get("/admin/operators").with(basic).header("X-TOTP", code2)).andExpect(status().isOk());
+    }
+
+    @Test
+    void partnerPortalIsolation() throws Exception {
+        var pa = partners.save(partner("PortalA"));
+        var pb = partners.save(partner("PortalB"));
+        var sa = newService("SA " + sn, ServiceType.VOTE, ConsentMode.SIMPLE_OPT_IN, pa);
+        keyword(sa, "PA");
+        var sb = newService("SB " + sn, ServiceType.VOTE, ConsentMode.SIMPLE_OPT_IN, pb);
+        user("partnera", "PARTNER", pa);
+        mo(UUID.randomUUID().toString(), msisdn(), "PA 1");
+        mo(UUID.randomUUID().toString(), msisdn(), "PA 2");
+        var basic = httpBasic("partnera", PW);
+        mvc.perform(get("/portal/services").with(basic)).andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1));
+        mvc.perform(get("/portal/results").param("serviceId", sa.getId().toString()).with(basic)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2));
+        mvc.perform(get("/portal/results").param("serviceId", sb.getId().toString()).with(basic)).andExpect(status().isNotFound());
+        assertTrue(auditRepo.findAll().stream().anyMatch(a -> a.getAction().equals("CROSS_ACCOUNT_ACCESS_DENIED") && a.getTarget().equals("service:" + sb.getId())));
+        mvc.perform(get("/portal/summary").with(basic)).andExpect(status().isOk()).andExpect(jsonPath("$.partner").value("PortalA"));
+        mvc.perform(get("/admin/operators").with(basic)).andExpect(status().isForbidden());
+        assertTrue(auditRepo.findAll().stream().anyMatch(a -> a.getAction().equals("ACCESS_DENIED") && a.getTarget().equals("GET /admin/operators")));
+        mvc.perform(get("/portal/summary").with(httpBasic("admin", PW))).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void reconciliationXlsxAndCsv() throws Exception {
+        String from = msisdn();
+        mo(UUID.randomUUID().toString(), from, "VOTE Z");
+        var m = lastMt("+216" + from);
+        String eventId = "MT-" + m.getCorrelationId();
+        mvc.perform(post("/callbacks/dlr").param("secret", "test-secret").param("cid", m.getCorrelationId()).param("message_status", "DELIVRD"));
+        // relevé XLSX : montant correct sur l'événement, une ligne inconnue de la plateforme
+        byte[] xlsx;
+        try (var wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook(); var out = new java.io.ByteArrayOutputStream()) {
+            var sh = wb.createSheet();
+            var h = sh.createRow(0);
+            h.createCell(0).setCellValue("Reference"); h.createCell(1).setCellValue("Montant"); h.createCell(2).setCellValue("Etat");
+            var r1 = sh.createRow(1);
+            r1.createCell(0).setCellValue(eventId); r1.createCell(1).setCellValue(1.0); r1.createCell(2).setCellValue("CHARGED");
+            var r2 = sh.createRow(2);
+            r2.createCell(0).setCellValue("MT-unknown"); r2.createCell(1).setCellValue(1.0); r2.createCell(2).setCellValue("CHARGED");
+            wb.write(out);
+            xlsx = out.toByteArray();
+        }
+        var file = new org.springframework.mock.web.MockMultipartFile("file", "releve.xlsx", "application/octet-stream", xlsx);
+        var res = mvc.perform(multipart("/admin/reconciliation/TT").file(file).with(httpBasic("finance", PW))
+                .param("from", Instant.now().minusSeconds(3600).toString()).param("to", Instant.now().plusSeconds(3600).toString())
+                .param("idColumn", "Reference").param("amountColumn", "Montant").param("statusColumn", "Etat"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.summary.MATCHED").value(1))
+                .andExpect(jsonPath("$.summary.MISSING_ON_PLATFORM").value(1)).andReturn();
+        String batch = new com.fasterxml.jackson.databind.ObjectMapper().readTree(res.getResponse().getContentAsString()).get("batch").asText();
+        // export des écarts en PDF et XLSX
+        mvc.perform(get("/admin/reconciliation/" + batch + "/export").param("format", "pdf").with(httpBasic("finance", PW)))
+                .andExpect(status().isOk()).andExpect(content().contentType(MediaType.APPLICATION_PDF));
+        mvc.perform(get("/admin/ledger/export").param("format", "xlsx").with(httpBasic("finance", PW))).andExpect(status().isOk());
+        mvc.perform(get("/admin/ledger/export").param("format", "csv").with(httpBasic("finance", PW))).andExpect(status().isOk());
+    }
+
+    @Test
+    void partnerWebhookReceivesMoEvent() throws Exception {
+        var p = partner("Hook");
+        p.setWebhookUrl("http://localhost:9/hook");
+        p.setWebhookSecret("s3cret");
+        p = partners.save(p);
+        var s = newService("Hooked " + sn, ServiceType.VOTE, ConsentMode.SIMPLE_OPT_IN, p);
+        keyword(s, "HK");
+        mo(UUID.randomUUID().toString(), msisdn(), "HK 1");
+        assertTrue(webhooks.findAll().stream().anyMatch(w -> w.getEventId().startsWith("MO-") && w.getUrl().endsWith("/hook")));
+    }
+
+    @Autowired WebhookRepo webhooks;
+    @Autowired AuditRepo auditRepo;
+
+    @Test
+    void tokenLoginWithMfa() throws Exception {
+        user("tokuser", "SUPPORT", null);
+        var om = new com.fasterxml.jackson.databind.ObjectMapper();
+        // sans MFA : mot de passe seul → jeton Bearer utilisable
+        mvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON).content("{\"username\":\"tokuser\",\"password\":\"bad-password-1\"}"))
+                .andExpect(status().isUnauthorized());
+        String t1 = om.readTree(mvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"username\":\"tokuser\",\"password\":\"" + PW + "\"}")).andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).get("token").asText();
+        mvc.perform(get("/admin/me").header("Authorization", "Bearer " + t1)).andExpect(status().isOk()).andExpect(jsonPath("$.username").value("tokuser"));
+        mvc.perform(get("/admin/me").header("Authorization", "Bearer " + t1 + "x")).andExpect(status().isUnauthorized());
+        // enrôlement MFA avec le jeton
+        mvc.perform(post("/admin/me/mfa/setup").header("Authorization", "Bearer " + t1)).andExpect(status().isOk());
+        String secret = userRepo.findByUsername("tokuser").orElseThrow().getTotpSecret();
+        String c1 = tn.vas.security.Totp.generate(secret, System.currentTimeMillis() / 30000);
+        mvc.perform(post("/admin/me/mfa/confirm").header("Authorization", "Bearer " + t1).contentType(MediaType.APPLICATION_JSON).content("{\"code\":\"" + c1 + "\"}")).andExpect(status().isOk());
+        // l'ancien jeton (émis sans MFA) ne suffit plus
+        mvc.perform(get("/admin/operators").header("Authorization", "Bearer " + t1)).andExpect(status().isUnauthorized());
+        // nouvelle connexion : code exigé, puis jeton valide sans code à chaque requête
+        mvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON).content("{\"username\":\"tokuser\",\"password\":\"" + PW + "\"}"))
+                .andExpect(status().isUnauthorized()).andExpect(header().string("X-MFA-Required", "true"));
+        String c2 = tn.vas.security.Totp.generate(secret, System.currentTimeMillis() / 30000);
+        String t2 = om.readTree(mvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"username\":\"tokuser\",\"password\":\"" + PW + "\",\"code\":\"" + c2 + "\"}")).andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).get("token").asText();
+        mvc.perform(get("/admin/operators").header("Authorization", "Bearer " + t2)).andExpect(status().isOk());
+    }
+
+    @Test
+    void accountLocksAfterFiveFailures() throws Exception {
+        user("locky", "SUPPORT", null);
+        for (int i = 0; i < 5; i++) {
+            mvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON).content("{\"username\":\"locky\",\"password\":\"nope-nope-nope1\"}")).andExpect(status().isUnauthorized());
+        }
+        mvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON).content("{\"username\":\"locky\",\"password\":\"" + PW + "\"}")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void dlrWebhookIsQueuedAndSigned() throws Exception {
+        var p = partner("DlrHook");
+        p.setWebhookUrl("http://localhost:9/dlr");
+        p.setWebhookSecret("k");
+        p = partners.save(p);
+        var s = newService("DH " + sn, ServiceType.ALERT, ConsentMode.SIMPLE_OPT_IN, p);
+        String key = "vas_dlrkey_" + sn;
+        var c = new ApiClient();
+        c.setName("dlr"); c.setPartner(p); c.setScopes("messages:send"); c.setKeyHash(ApiKeyFilter.sha256(key));
+        apiClients.save(c);
+        var res = mvc.perform(post("/api/v1/messages").header("X-API-Key", key).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"to\":\"98123456\",\"text\":\"x\",\"serviceId\":" + s.getId() + "}")).andExpect(status().isAccepted()).andReturn();
+        String cid = new com.fasterxml.jackson.databind.ObjectMapper().readTree(res.getResponse().getContentAsString()).get("id").asText();
+        mvc.perform(post("/callbacks/dlr").param("secret", "test-secret").param("cid", cid).param("message_status", "DELIVRD")).andExpect(status().isOk());
+        var hook = webhooks.findAll().stream().filter(w -> w.getEventId().equals("DLR-" + cid + "-DELIVERED")).findFirst().orElseThrow();
+        assertEquals("PENDING", hook.getStatus());
+        assertTrue(hook.getPayload().contains("\"status\":\"DELIVERED\""));
+        // le rejeu du même DLR ne crée pas de second callback
+        mvc.perform(post("/callbacks/dlr").param("secret", "test-secret").param("cid", cid).param("message_status", "DELIVRD")).andExpect(status().isOk());
+        assertEquals(1, webhooks.findAll().stream().filter(w -> w.getEventId().startsWith("DLR-" + cid)).count());
     }
 }

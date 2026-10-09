@@ -5,7 +5,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "vas")
 public record VasProperties(Jasmin jasmin, Callback callback, Retry retry, List<AdminUser> adminUsers,
-                            String queue, String rateLimit, String publicBaseUrl, int moDedupSeconds) {
+                            String queue, String rateLimit, String publicBaseUrl, int moDedupSeconds, boolean mfaEnforced, String tokenSecret) {
     /** Jasmin HTTP API. Un utilisateur Jasmin par opérateur ("vas_&lt;code&gt;") porte la route MT vers le bon connecteur SMPP. */
     public record Jasmin(String baseUrl, String password, boolean simulator) {}
     public record Callback(String sharedSecret) {}

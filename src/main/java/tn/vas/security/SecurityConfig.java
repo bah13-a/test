@@ -6,11 +6,8 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.core.userdetails.User;
-import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
 import tn.vas.config.VasProperties;
@@ -30,25 +27,25 @@ public class SecurityConfig {
     }
 
     @Bean
-    UserDetailsService users(VasProperties props) {
-        var list = props.adminUsers() == null ? java.util.List.<VasProperties.AdminUser>of() : props.adminUsers();
-        return new InMemoryUserDetailsManager(list.stream()
-                .map(u -> User.withUsername(u.username()).password(u.passwordHash()).roles(u.roles().toArray(String[]::new)).build())
-                .toList());
-    }
-
-    @Bean
-    SecurityFilterChain chain(HttpSecurity http, ApiClientRepo clients, RateLimiter limiter, VasProperties props) throws Exception {
+    SecurityFilterChain chain(HttpSecurity http, ApiClientRepo clients, RateLimiter limiter, VasProperties props,
+                           java.time.Clock clock, tn.vas.service.AuditService audit, TokenService tokens, UserService userService) throws Exception {
         http.csrf(c -> c.disable())
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .httpBasic(b -> {})
+            .httpBasic(b -> b.authenticationEntryPoint((req, res, ex) -> res.sendError(401, "unauthorized"))) // sans WWW-Authenticate : pas de boîte de dialogue navigateur
+            .addFilterBefore(new BearerFilter(tokens, userService), BasicAuthenticationFilter.class)
             .addFilterBefore(new ApiKeyFilter(clients, limiter), BasicAuthenticationFilter.class)
+            .exceptionHandling(e -> e.accessDeniedHandler((req, res, ex) -> {
+                audit.log("ACCESS_DENIED", req.getMethod() + " " + req.getRequestURI(), null); // tentative d'accès refusée tracée (Annexe A14)
+                res.sendError(403, "forbidden");
+            }))
+            .addFilterAfter(new MfaFilter(props.mfaEnforced(), clock), BasicAuthenticationFilter.class)
             .addFilterBefore(new CallbackSecretFilter(props.callback().sharedSecret()), BasicAuthenticationFilter.class)
             .authorizeHttpRequests(a -> a
-                .requestMatchers("/api/v1/health", "/actuator/health/**", "/actuator/health", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/", "/index.html", "/app.js").permitAll()
+                .requestMatchers("/auth/login", "/api/v1/health", "/actuator/health/**", "/actuator/health", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/", "/index.html", "/assets/**", "/favicon.svg").permitAll()
                 .requestMatchers("/callbacks/**").hasRole("GATEWAY")
                 .requestMatchers("/api/v1/**").authenticated()
                 .requestMatchers("/actuator/**").hasAnyRole("SUPER_ADMIN", "NOC")
+                .requestMatchers("/portal/**").hasRole("PARTNER")
                 .requestMatchers("/admin/**").authenticated()
                 .anyRequest().denyAll());
         return http.build();

@@ -14,9 +14,9 @@ import tn.vas.repo.Repos.*;
 /** Moteur VAS côté MO : dédoublonnage, routage opérateur+short code+keyword, STOP/AIDE, consentement, limites, réponses MT. */
 @Service
 public class MoService {
-    private static final List<String> STOP_WORDS = List.of("STOP", "DESABO", "ARRET");
-    private static final List<String> HELP_WORDS = List.of("AIDE", "HELP");
-    private static final List<String> YES_WORDS = List.of("OUI", "YES", "OK", "نعم");
+    private static final List<String> STOP_WORDS = List.of("STOP", "DESABO", "ARRET", "UNSUBSCRIBE", "الغاء", "إلغاء");
+    private static final List<String> HELP_WORDS = List.of("AIDE", "HELP", "مساعدة");
+    private static final List<String> YES_WORDS = List.of("OUI", "YES", "OK", "نعم", "ايه");
 
     private final OperatorRepo operators;
     private final ShortCodeRepo shortCodes;
@@ -29,11 +29,18 @@ public class MoService {
     private final VasProperties props;
     private final Clock clock;
     private final io.micrometer.core.instrument.MeterRegistry metrics;
+    private final ReplyRepo replies;
+    private final WebhookService webhooks;
+    private final RuleRepo rules;
 
     public MoService(OperatorRepo operators, ShortCodeRepo shortCodes, KeywordRepo keywords, MoRepo mos,
                      SubscriptionRepo subs, ConsentRepo consents, MtService mt, AuditService audit,
-                     VasProperties props, Clock clock, io.micrometer.core.instrument.MeterRegistry metrics) {
+                     VasProperties props, Clock clock, io.micrometer.core.instrument.MeterRegistry metrics,
+                     ReplyRepo replies, WebhookService webhooks, RuleRepo rules) {
+        this.rules = rules;
         this.metrics = metrics;
+        this.replies = replies;
+        this.webhooks = webhooks;
         this.operators = operators;
         this.shortCodes = shortCodes;
         this.keywords = keywords;
@@ -108,23 +115,29 @@ public class MoService {
         if (svc.getStatus() != ServiceStatus.ACTIVE
                 || (svc.getOpensAt() != null && now.isBefore(svc.getOpensAt()))
                 || (svc.getClosesAt() != null && now.isAfter(svc.getClosesAt()))) {
-            reply(mo, svc, orDefault(svc.getReplyClosed(), "Service indisponible."), null);
+            reply(mo, svc, text(svc, Messages.CLOSED, svc.getReplyClosed(), mo), null);
             return MoOutcome.SERVICE_CLOSED;
         }
         if (svc.isRegulated() && !svc.isRegulatoryApproved()) {
-            audit.log("MO_BLOCKED_REGULATORY", "service:" + svc.getId(), mo.getMsisdn());
+            audit.log("MO_BLOCKED_REGULATORY", "service:" + svc.getId(), tn.vas.web.AdminController.mask(mo.getMsisdn()));
+            return MoOutcome.BLOCKED;
+        }
+        if (rules.blacklisted(mo.getMsisdn(), svc)
+                || (rules.whitelistSize(svc) > 0 && !rules.whitelisted(mo.getMsisdn(), svc))) {
+            audit.log("MO_BLOCKED_RULE", "service:" + svc.getId(), tn.vas.web.AdminController.mask(mo.getMsisdn()));
             return MoOutcome.BLOCKED;
         }
         if (svc.getMaxActionsPerMsisdn() > 0 && mos.countByServiceAndMsisdnAndOutcome(svc, mo.getMsisdn(), MoOutcome.ROUTED)
                 >= svc.getMaxActionsPerMsisdn()) {
-            reply(mo, svc, orDefault(svc.getReplyLimit(), "Limite atteinte."), null);
+            reply(mo, svc, text(svc, Messages.LIMIT, svc.getReplyLimit(), mo), null);
             return MoOutcome.LIMIT_REACHED;
         }
         if (svc.getType() == ServiceType.SUBSCRIPTION) {
             subscribe(mo, svc, text);
         } else {
-            reply(mo, svc, orDefault(svc.getReplyOk(), "Merci, votre message a bien été reçu."), EventType.MT);
+            reply(mo, svc, text(svc, Messages.OK, svc.getReplyOk(), mo), EventType.MT);
         }
+        webhooks.enqueueMo(mo, svc);
         return MoOutcome.ROUTED;
     }
 
@@ -137,14 +150,14 @@ public class MoService {
             return s;
         });
         if (sub.getStatus() == SubStatus.ACTIVE) {
-            reply(mo, svc, orDefault(svc.getReplyOk(), "Vous êtes déjà abonné."), null);
+            reply(mo, svc, text(svc, Messages.ALREADY, null, mo), null);
             return;
         }
         consent(mo.getMsisdn(), svc, "OPT_IN_REQUEST", "SMS", text);
         if (svc.getConsentMode() == ConsentMode.DOUBLE_OPT_IN) {
             sub.setStatus(SubStatus.PENDING_CONFIRMATION);
             subs.save(sub);
-            reply(mo, svc, "Répondez OUI pour confirmer votre abonnement à " + svc.getName() + ". STOP pour annuler.", null);
+            reply(mo, svc, String.format(text(svc, Messages.CONFIRM, null, mo), svc.getName()), null);
         } else {
             activate(sub, mo, svc, text);
         }
@@ -168,7 +181,7 @@ public class MoService {
         sub.setNextRenewalAt(now.plus(Duration.ofDays(30)));
         subs.save(sub);
         consent(mo.getMsisdn(), svc, "ACTIVATED", "SMS", proof);
-        reply(mo, svc, orDefault(svc.getReplyOk(), "Abonnement activé. STOP pour vous désabonner."), EventType.SUBSCRIPTION);
+        reply(mo, svc, text(svc, Messages.SUB_OK, svc.getReplyOk(), mo), EventType.SUBSCRIPTION);
     }
 
     private MoOutcome stop(MoMessage mo, ShortCode sc, String[] tokens) {
@@ -185,7 +198,7 @@ public class MoService {
             subs.save(s);
             consent(mo.getMsisdn(), s.getService(), "STOPPED", "SMS", mo.getContent());
             mo.setService(s.getService());
-            reply(mo, s.getService(), orDefault(s.getService().getReplyStop(), "Vous êtes désabonné."), null);
+            reply(mo, s.getService(), text(s.getService(), Messages.STOP, s.getService().getReplyStop(), mo), null);
         }
         return MoOutcome.STOPPED;
     }
@@ -194,7 +207,7 @@ public class MoService {
         keywords.findByShortCode(sc).stream()
                 .filter(k -> tokens.length < 2 || k.getWord().equalsIgnoreCase(tokens[1])).findFirst().ifPresent(k -> {
                     mo.setService(k.getService());
-                    reply(mo, k.getService(), orDefault(k.getService().getReplyHelp(), "STOP pour vous désabonner."), null);
+                    reply(mo, k.getService(), text(k.getService(), Messages.HELP, k.getService().getReplyHelp(), mo), null);
                 });
         return MoOutcome.HELP;
     }
@@ -221,7 +234,12 @@ public class MoService {
                 Duration.ofHours(24)));
     }
 
-    private static String orDefault(String v, String d) {
-        return v == null || v.isBlank() ? d : v;
+    /** Texte de réponse : surcharge par service+langue, puis champ legacy du service (langue par défaut), puis catalogue système. */
+    private String text(VasService svc, String kind, String legacy, MoMessage mo) {
+        String lang = Messages.detect(mo.getContent(), svc.getDefaultLang());
+        var custom = replies.findByServiceAndLangAndKind(svc, lang, kind);
+        if (custom.isPresent()) return custom.get().getText();
+        if (legacy != null && !legacy.isBlank() && lang.equals(svc.getDefaultLang())) return legacy;
+        return Messages.text(lang, kind);
     }
 }

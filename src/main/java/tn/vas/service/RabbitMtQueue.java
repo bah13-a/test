@@ -40,7 +40,7 @@ public class RabbitMtQueue implements MtQueue {
     @ConditionalOnProperty(name = "vas.queue", havingValue = "rabbit")
     static class Topology {
         @Bean DirectExchange mtExchange() { return new DirectExchange("vas.mt", true, false); }
-        @Bean Queue mtDlq() { return QueueBuilder.durable("vas.mt.dlq").build(); }
+        @Bean Queue mtDlq() { return QueueBuilder.durable("vas.mt.dlq").quorum().build(); }
         @Bean Queue mtTransactional() { return mtQueue("transactional"); }
         @Bean Queue mtConfirmation() { return mtQueue("confirmation"); }
         @Bean Queue mtBulk() { return mtQueue("bulk"); }
@@ -49,7 +49,7 @@ public class RabbitMtQueue implements MtQueue {
         @Bean Binding b3(DirectExchange ex) { return BindingBuilder.bind(mtBulk()).to(ex).with("mt.bulk"); }
 
         private Queue mtQueue(String p) {
-            return QueueBuilder.durable("vas.mt." + p).deadLetterExchange("").deadLetterRoutingKey("vas.mt.dlq").build();
+            return QueueBuilder.durable("vas.mt." + p).quorum().deadLetterExchange("").deadLetterRoutingKey("vas.mt.dlq").build();
         }
     }
 

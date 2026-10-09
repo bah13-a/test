@@ -30,9 +30,13 @@ public class ApiController {
     private final MoRepo mos;
     private final SubscriptionRepo subs;
     private final SubscriptionService subscriptionService;
+    private final RuleRepo rules;
+    private final AuditService audit;
 
     public ApiController(MtService mtService, MtRepo mts, MtHistoryRepo history, OperatorRepo operators, ServiceRepo services,
-                         MoRepo mos, SubscriptionRepo subs, SubscriptionService subscriptionService) {
+                         MoRepo mos, SubscriptionRepo subs, SubscriptionService subscriptionService, RuleRepo rules, AuditService audit) {
+        this.rules = rules;
+        this.audit = audit;
         this.mtService = mtService;
         this.mts = mts;
         this.history = history;
@@ -64,7 +68,10 @@ public class ApiController {
         Operator op = r.operator() != null
                 ? operators.findByCode(r.operator().toUpperCase(Locale.ROOT)).orElseThrow(() -> bad("opérateur inconnu"))
                 : svc != null ? svc.getShortCode().getOperator() : null;
-        if (op == null) throw bad("operator ou serviceId requis");
+        if (op == null) op = byPrefix(msisdn);
+        if (op == null) throw bad("operator ou serviceId requis (préfixes opérateur non configurés)");
+        if (svc != null && (rules.blacklisted(msisdn, svc) || (rules.whitelistSize(svc) > 0 && !rules.whitelisted(msisdn, svc))))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "destinataire exclu");
         String sender = svc != null ? svc.getShortCode().getNumber() : r.sender();
         if (sender == null || sender.isBlank()) throw bad("sender requis");
         if (svc != null && svc.getStatus() != ServiceStatus.ACTIVE) throw new ResponseStatusException(HttpStatus.CONFLICT, "service inactif");
@@ -130,6 +137,20 @@ public class ApiController {
         return Map.of("status", "UP");
     }
 
+    /** Résolution par préfixe configuré (plus long préfixe gagnant). Ne tient pas compte de la portabilité : à compléter par une source opérateur. */
+    private Operator byPrefix(String msisdn) {
+        String national = msisdn.substring(4);
+        Operator best = null;
+        int len = -1;
+        for (var o : operators.findAll()) {
+            for (String p : o.getMsisdnPrefixes().split(",")) {
+                p = p.trim();
+                if (!p.isEmpty() && national.startsWith(p) && p.length() > len) { best = o; len = p.length(); }
+            }
+        }
+        return best;
+    }
+
     private List<VasService> visibleServices(ApiClient c) {
         return c.getPartner() == null ? services.findAll() : services.findByPartner(c.getPartner());
     }
@@ -137,7 +158,10 @@ public class ApiController {
     private VasService ownedService(ApiClient c, Long id) {
         var s = services.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         if (c.getPartner() != null && (s.getPartner() == null || !s.getPartner().getId().equals(c.getPartner().getId())))
+        {
+            audit.log("CROSS_ACCOUNT_ACCESS_DENIED", "service:" + id, "api:" + c.getName());
             throw new ResponseStatusException(HttpStatus.NOT_FOUND); // aucun accès aux données d'un autre partenaire
+        }
         return s;
     }
 

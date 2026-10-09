@@ -12,14 +12,18 @@ import tn.vas.domain.Enums.Priority;
 @ConditionalOnProperty(name = "vas.queue", havingValue = "memory")
 public class MemoryMtQueue implements MtQueue {
     private final MtDispatcher dispatcher;
+    private final boolean async;
+    private final java.util.concurrent.ExecutorService pool;
 
-    public MemoryMtQueue(@Lazy MtDispatcher dispatcher) {
+    public MemoryMtQueue(@Lazy MtDispatcher dispatcher, @org.springframework.beans.factory.annotation.Value("${vas.queue-async:false}") boolean async) {
         this.dispatcher = dispatcher;
+        this.async = async;
+        this.pool = async ? java.util.concurrent.Executors.newFixedThreadPool(8) : null;
     }
 
     @Override
     public void publish(String correlationId, Priority priority) {
-        Runnable r = () -> dispatcher.dispatch(correlationId);
+        Runnable r = async ? () -> pool.submit(() -> dispatcher.dispatch(correlationId)) : () -> dispatcher.dispatch(correlationId);
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override public void afterCommit() { r.run(); }

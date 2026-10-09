@@ -275,21 +275,46 @@ el.append(table(tc, [52 * mm, 28 * mm, 25 * mm, 25 * mm, 25 * mm, 25 * mm], alig
 el.append(Spacer(1, 2 * mm))
 el.append(P(f"Hors support 24/7 optionnel ({tnd(SUPPORT_247)} TND / an), hors options, hors frais opérateurs. TVA 19 % en sus.", NOTE))
 
-# ---- 8. Socle existant, risques ----------------------------------------------------------------
-el.append(P("8. Socle logiciel déjà réalisé dans le dépôt et réduction possible de charge", H1))
-cov = [["Lot / exigence CDC", "État dans le dépôt", "Reste à faire pour la V1"],
-       ["A - Gateway SMPP (Jasmin), routage, retry, DLR", "Adaptateur HTTP Jasmin, simulateur, file RabbitMQ par priorité, retry + balayeur, DLR idempotent", "Provisioning réel des 3 opérateurs, tests de charge, failover multi-liens"],
-       ["B - Moteur VAS", "Short codes, keywords, STOP/AIDE, consentement simple/double, limites, fenêtres, blocage réglementaire", "Scénarios avancés (quiz), i18n AR/FR/EN des interfaces, anti-abus"],
-       ["C - Billing / ledger", "Ledger idempotent, tarifs versionnés 4-yeux, partage de revenus, rapprochement CSV", "Import XLSX, formats propres à chaque opérateur, dashboard de réconciliation, corrections"],
-       ["D - API REST", "Messages, services, rapports, abonnements, clés hachées, scopes, quotas, webhooks HMAC + DLQ", "OAuth2 optionnel, portail développeur, versionnage"],
-       ["E/F - Back-office, portail", "API d'administration complète, vue lecture minimale", "Interface React complète (écritures, dashboards, exports), portail partenaire"],
-       ["Sécurité", "RBAC 7 rôles, audit, masquage MSISDN, secrets par environnement", "MFA TOTP, rotation de secrets, durcissement OS, pen-test"],
-       ["G - HA / supervision", "Métriques Prometheus, dashboard Grafana et alertes de base, docker-compose", "PostgreSQL HA, bascule testée, PRA, restauration démontrée, logs centralisés"]]
-el.append(table([[P(c, SB if i == 0 else S) for c in r] for i, r in enumerate(cov)], [45 * mm, 70 * mm, 65 * mm]))
+# ---- 8. Avancement du dépôt et reste à faire ------------------------------------------------
+PROGRESS = {  # estimation d'avancement du code livré dans le dépôt (0-1) et reste à faire, par poste du bordereau
+ "Cadrage & architecture": (0.80, "Ateliers avec les opérateurs, collecte des paramètres (Annexe B), validation du HLD"),
+ "Installation/configuration gateway SMPP": (0.55, "Validation de provision.sh sur un Jasmin réel, durcissement, exploitation"),
+ "Connecteur Tunisie Telecom": (0.35, "VPN, bind réel, formats DLR, recette opérateur"),
+ "Connecteur Orange Tunisie": (0.35, "VPN, bind réel, formats DLR, recette opérateur"),
+ "Connecteur Ooredoo Tunisie": (0.35, "VPN, bind réel, formats DLR, recette opérateur"),
+ "Moteur VAS": (0.85, "Scénarios spécifiques (quiz), ajustements issus de la recette métier"),
+ "Billing métier / ledger": (0.85, "Règles propres aux opérateurs (DCB/premium), corrections comptables"),
+ "Réconciliation opérateurs": (0.85, "Formats réels des relevés, dashboard de suivi"),
+ "API REST / Webhooks": (0.90, "OAuth2 optionnel, portail développeur"),
+ "Back-office": (0.85, "Retours UAT, ergonomie, éditions avancées"),
+ "Portail partenaires": (0.85, "Retours partenaires, indicateurs supplémentaires"),
+ "Sécurité & RBAC/MFA": (0.75, "Test d'intrusion, rotation de secrets, durcissement OS"),
+ "Monitoring & alerting": (0.75, "Alertmanager (e-mail/Teams/SMS), seuils calés sur le trafic réel"),
+ "HA / PRA / sauvegardes": (0.50, "Validation de la topologie HA et d'une bascule en préproduction, PRA joué"),
+ "Tests de charge & sécurité": (0.40, "Charge sur infra cible (200 SMS/s), tests de panne, pen-test"),
+ "Documentation & formation": (0.70, "Formation et PV de transfert, mise à jour post-recette"),
+ "Mise en production & hypercare": (0.10, "Go-live, hypercare, transfert des accès"),
+}
+el.append(PageBreak())
+el.append(P("8. Avancement du code livré dans le dépôt et reste à faire", H1))
+el.append(P("Le dépôt contient une plateforme fonctionnelle (32 tests automatisés, parcours navigateur de bout en bout, validation sur PostgreSQL et Redis réels, "
+            "sauvegarde/restauration GPG exécutée, test de charge mesuré). Les pourcentages ci-dessous sont des estimations d'avancement par poste, à confirmer en revue de code ; "
+            "ils ne modifient pas les montants des sections 2 à 7, qui chiffrent la V1 complète telle que décrite au CDC.", B))
 el.append(Spacer(1, 2 * mm))
-el.append(P("Si le socle du dépôt est repris après revue de code, durcissement et couverture de tests complémentaire, l'économie de charge indicative sur les postes "
-            "Moteur VAS, Billing, API, Gateway et Sécurité est de l'ordre de 55 à 70 JH (≈ 12 à 15 % de la charge) ; elle n'est pas déduite des montants ci-dessus, "
-            "qui chiffrent la V1 complète telle que décrite au CDC.", B))
+cov = [["Poste", "JH", "Avancement", "JH restants", "Reste à faire"]]
+done_jh = 0.0; rest_jh = 0.0; rest_cost = 0.0
+for name, jh, cost, _, _, _ in rows:
+    pg, todo = PROGRESS[name]
+    r = jh * (1 - pg)
+    done_jh += jh * pg; rest_jh += r; rest_cost += cost * (1 - pg)
+    cov.append([P(name), jh, f"{int(pg * 100)} %", f"{r:.0f}", P(todo)])
+cov.append([P("Gestion de projet transversale"), pm_jh, "-", f"{pm_jh * 0.6:.0f}", P("Pilotage jusqu'à la mise en production")])
+rest_jh += pm_jh * 0.6; rest_cost += pm_cost * 0.6
+cov.append(["Total", build_jh, f"{100 * done_jh / build_jh:.0f} %", f"{rest_jh:.0f}", P(f"Reste à faire ≈ {tnd(rest_cost)} TND HT avant aléas")])
+el.append(table(cov, [48 * mm, 12 * mm, 20 * mm, 20 * mm, 80 * mm], align_right=(1, 2, 3), total_last=True))
+el.append(Spacer(1, 2 * mm))
+el.append(P("Le reste à faire est dominé par des activités qui dépendent d'acteurs externes et non du développement : connexion aux trois opérateurs réels, "
+            "recette opérateur, validation de la haute disponibilité sur l'infrastructure cible, test d'intrusion et formation.", B))
 el.append(P("Principaux risques et dépendances", H2))
 for t in ["Délais opérateurs (contrats, VPN, comptes SMPP de test, attribution de short codes) : jusqu'à plusieurs mois, non maîtrisés par le prestataire.",
           "Formats de DLR et de relevés de facturation propres à chaque opérateur, connus tardivement : couverts en partie par l'aléa de 10 %.",
