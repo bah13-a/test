@@ -52,3 +52,10 @@ Mot de passe : 12 caractères minimum, lettres et chiffres. 5 échecs → verrou
 ## 5. Rotation de secrets
 
 `CALLBACK_SECRET` / `JASMIN_PASSWORD` : modifier dans `.env` **et** dans Jasmin (`provision.sh`), redémarrer l'application, puis Jasmin. Clés API : créer une nouvelle clé, basculer le partenaire, révoquer l'ancienne. Mots de passe : menu Utilisateurs. Aucune valeur secrète n'est dans le dépôt Git.
+
+## 6. Comptes, facturation et clé de données
+
+- **Nouveau compte** : le mot de passe saisi par l'administrateur est provisoire ; l'utilisateur doit le changer à sa première connexion (aucun autre écran avant). Une réinitialisation de mot de passe, un changement de rôle, une désactivation ou une réinitialisation du MFA ferment toutes les sessions du compte. Chacun peut fermer ses propres sessions (Sécurité / MFA → Sessions).
+- **Clôture mensuelle** (FINANCE) : rapprocher les relevés opérateur, puis Facturation → *Clôturer la période* (impossible tant qu'un événement est en attente ou contesté). Les corrections ultérieures passent par un *ajustement/remboursement*, jamais par une modification. Les reversements partenaires se créent par une personne et se marquent *payés* par une autre.
+- **`DATA_KEY`** : générer avec `openssl rand -base64 48`, la conserver dans le coffre de secrets **et** hors serveur. Changer la clé sans rechiffrer les données rend les numéros illisibles : prévoir une opération de rechiffrement (lecture avec l'ancienne clé, écriture avec la nouvelle) avant tout changement.
+- **Liaisons SMSC de secours** : `<OP>_SMSC_HOST_2` (jusqu'à `_4`) dans `.env`, puis relancer `provision.sh` ; `<OP>_LINK_MODE=failover` (défaut) ou `roundrobin`.

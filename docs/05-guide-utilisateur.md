@@ -43,3 +43,8 @@ curl -X POST https://vas.example.tn/api/v1/messages \
   -d '{"to":"98123456","text":"Bonjour","serviceId":12,"clientRef":"cmd-4711"}'
 # 202 {"id":"…","status":"PENDING",…}  (rejouer la même clientRef renvoie le même message)
 ```
+**Envoi programmé** : ajouter `"scheduleAt":"2026-12-01T09:00:00Z"` (jusqu'à 30 jours) ; le message reste `PENDING` jusqu'à l'échéance.
+
+**OAuth2** (alternative à `X-API-Key`) : `POST /oauth/token` en `application/x-www-form-urlencoded` avec `grant_type=client_credentials`, `client_id=client-<id>` et `client_secret=<clé API>` ; la réponse contient un `access_token` Bearer valable 1 h, à envoyer en `Authorization: Bearer …`.
+
+**Webhooks** : l'URL doit être en **https** et pointer vers une adresse publique (les adresses privées et la métadonnée cloud sont refusées, à l'enregistrement et à chaque envoi).
