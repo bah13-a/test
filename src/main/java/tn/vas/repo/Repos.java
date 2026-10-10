@@ -83,7 +83,7 @@ public final class Repos {
         List<ConsentRecord> findByMsisdnAndServiceOrderByAtAsc(String msisdn, VasService s);
     }
 
-    public interface LedgerRepo extends JpaRepository<LedgerEvent, Long> {
+    public interface LedgerRepo extends JpaRepository<LedgerEvent, Long>, org.springframework.data.jpa.repository.JpaSpecificationExecutor<LedgerEvent> {
         Optional<LedgerEvent> findByEventId(String eventId);
         List<LedgerEvent> findByOperatorAndCreatedAtBetween(Operator o, Instant from, Instant to);
         @Query("select e.billingStatus, sum(e.grossAmount), sum(e.partnerShare), sum(e.providerShare), count(e) from LedgerEvent e "
@@ -96,6 +96,8 @@ public final class Repos {
 
     public interface ReconRepo extends JpaRepository<ReconItem, Long> {
         List<ReconItem> findByBatchId(String batchId);
+        org.springframework.data.domain.Page<ReconItem> findByBatchId(String batchId, org.springframework.data.domain.Pageable p);
+        org.springframework.data.domain.Page<ReconItem> findByBatchIdAndResult(String batchId, Enums.ReconResult r, org.springframework.data.domain.Pageable p);
     }
 
     public interface ApiClientRepo extends JpaRepository<ApiClient, Long> {

@@ -47,3 +47,9 @@ export async function download(path, filename) {
 }
 
 export const qs = (o) => new URLSearchParams(Object.entries(o).filter(([, v]) => v !== '' && v != null)).toString();
+
+/** Liste paginée : renvoie les lignes et le total (en-tête X-Total-Count). */
+export async function apiPage(path) {
+  const r = await check(await fetch(path, { headers: headers() }));
+  return { rows: await r.json(), total: Number(r.headers.get('X-Total-Count') ?? 0) };
+}

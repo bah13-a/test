@@ -94,9 +94,9 @@ public class AdminController {
 
     @GetMapping("/users")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public List<Map<String, Object>> listUsers() {
-        return users.findAll().stream().map(u -> Map.<String, Object>of("id", u.getId(), "username", u.getUsername(), "roles", u.getRoles(),
-                "active", u.isActive(), "mfaEnabled", u.isMfaEnabled(), "partnerId", u.getPartner() == null ? "" : u.getPartner().getId())).toList();
+    public ResponseEntity<List<Map<String, Object>>> listUsers(@RequestParam(required = false) Integer page, @RequestParam(required = false) Integer size) {
+        return Paging.slice(users.findAll().stream().map(u -> Map.<String, Object>of("id", u.getId(), "username", u.getUsername(), "roles", u.getRoles(),
+                "active", u.isActive(), "mfaEnabled", u.isMfaEnabled(), "partnerId", u.getPartner() == null ? "" : u.getPartner().getId())).toList(), page, size);
     }
 
     @PostMapping("/users")
@@ -154,7 +154,7 @@ public class AdminController {
     // ---------------------------------------------------------------- Opérateurs, short codes
     @GetMapping("/operators")
     @PreAuthorize(ANY)
-    public List<Operator> operators() { return operators.findAll(); }
+    public ResponseEntity<List<Operator>> operators(@RequestParam(required = false) Integer page, @RequestParam(required = false) Integer size) { return Paging.slice(operators.findAll(), page, size); }
 
     public record OperatorPatch(Integer maxTps, String status, String msisdnPrefixes, DlrBillingRule dlrBillingRule) {}
 
@@ -174,7 +174,7 @@ public class AdminController {
 
     @GetMapping("/shortcodes")
     @PreAuthorize(ANY)
-    public List<ShortCode> shortCodes() { return shortCodes.findAll(); }
+    public ResponseEntity<List<ShortCode>> shortCodes(@RequestParam(required = false) Integer page, @RequestParam(required = false) Integer size) { return Paging.slice(shortCodes.findAll(), page, size); }
 
     @PostMapping("/shortcodes")
     @PreAuthorize(MGR)
@@ -202,9 +202,9 @@ public class AdminController {
 
     @GetMapping("/partners")
     @PreAuthorize(ANY)
-    public List<Map<String, Object>> partners() {
-        return partners.findAll().stream().map(p -> Map.<String, Object>of("id", p.getId(), "name", p.getName(), "sharePercent", p.getSharePercent(),
-                "webhookUrl", p.getWebhookUrl() == null ? "" : p.getWebhookUrl())).toList(); // le secret webhook n'est jamais renvoyé
+    public ResponseEntity<List<Map<String, Object>>> partners(@RequestParam(required = false) Integer page, @RequestParam(required = false) Integer size) {
+        return Paging.slice(partners.findAll().stream().map(p -> Map.<String, Object>of("id", p.getId(), "name", p.getName(), "sharePercent", p.getSharePercent(),
+                "webhookUrl", p.getWebhookUrl() == null ? "" : p.getWebhookUrl())).toList(), page, size); // le secret webhook n'est jamais renvoyé
     }
 
     @PostMapping("/partners")
@@ -236,9 +236,9 @@ public class AdminController {
 
     @GetMapping("/api-clients")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public List<Map<String, Object>> apiClients() {
-        return apiClients.findAll().stream().map(c -> Map.<String, Object>of("id", c.getId(), "name", c.getName(), "scopes", c.getScopes(),
-                "active", c.isActive(), "rateLimitPerMin", c.getRateLimitPerMin(), "partnerId", c.getPartner() == null ? "" : c.getPartner().getId())).toList();
+    public ResponseEntity<List<Map<String, Object>>> apiClients(@RequestParam(required = false) Integer page, @RequestParam(required = false) Integer size) {
+        return Paging.slice(apiClients.findAll().stream().map(c -> Map.<String, Object>of("id", c.getId(), "name", c.getName(), "scopes", c.getScopes(),
+                "active", c.isActive(), "rateLimitPerMin", c.getRateLimitPerMin(), "partnerId", c.getPartner() == null ? "" : c.getPartner().getId())).toList(), page, size);
     }
 
     /** La clé en clair n'est retournée qu'à la création ; seul son hash SHA-256 est stocké. */
@@ -276,8 +276,8 @@ public class AdminController {
 
     @GetMapping("/services")
     @PreAuthorize(ANY)
-    public List<Map<String, Object>> services() {
-        return services.findAll().stream().map(s -> {
+    public ResponseEntity<List<Map<String, Object>>> services(@RequestParam(required = false) Integer page, @RequestParam(required = false) Integer size) {
+        return Paging.slice(services.findAll().stream().map(s -> {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", s.getId()); m.put("name", s.getName()); m.put("type", s.getType()); m.put("status", s.getStatus());
             m.put("shortCode", s.getShortCode().getNumber()); m.put("operator", s.getShortCode().getOperator().getCode());
@@ -286,7 +286,7 @@ public class AdminController {
             m.put("opensAt", s.getOpensAt()); m.put("closesAt", s.getClosesAt()); m.put("maxActionsPerMsisdn", s.getMaxActionsPerMsisdn());
             m.put("defaultLang", s.getDefaultLang());
             return m;
-        }).toList();
+        }).toList(), page, size);
     }
 
     @PostMapping("/services")
@@ -398,9 +398,9 @@ public class AdminController {
 
     @GetMapping("/rules")
     @PreAuthorize(ANY)
-    public List<Map<String, Object>> rules() {
-        return rules.findAll().stream().map(r -> Map.<String, Object>of("id", r.getId(), "msisdn", mask(r.getMsisdn()), "type", r.getRuleType(),
-                "service", r.getService() == null ? "" : r.getService().getName(), "reason", r.getReason() == null ? "" : r.getReason())).toList();
+    public ResponseEntity<List<Map<String, Object>>> rules(@RequestParam(required = false) Integer page, @RequestParam(required = false) Integer size) {
+        return Paging.slice(rules.findAll().stream().map(r -> Map.<String, Object>of("id", r.getId(), "msisdn", mask(r.getMsisdn()), "type", r.getRuleType(),
+                "service", r.getService() == null ? "" : r.getService().getName(), "reason", r.getReason() == null ? "" : r.getReason())).toList(), page, size);
     }
 
     @PostMapping("/rules")
@@ -428,11 +428,11 @@ public class AdminController {
 
     @GetMapping("/tariffs")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','FINANCE','VAS_MANAGER','AUDITOR')")
-    public List<Map<String, Object>> tariffs(@RequestParam(required = false) Long serviceId) {
-        return tariffs.findAll().stream().filter(t -> serviceId == null || t.getService().getId().equals(serviceId))
+    public ResponseEntity<List<Map<String, Object>>> tariffs(@RequestParam(required = false) Long serviceId, @RequestParam(required = false) Integer page, @RequestParam(required = false) Integer size) {
+        return Paging.slice(tariffs.findAll().stream().filter(t -> serviceId == null || t.getService().getId().equals(serviceId))
                 .map(t -> Map.<String, Object>of("id", t.getId(), "serviceId", t.getService().getId(), "service", t.getService().getName(),
                         "eventType", t.getEventType(), "grossAmount", t.getGrossAmount(), "operatorPercent", t.getOperatorPercent(),
-                        "taxPercent", t.getTaxPercent(), "effectiveFrom", t.getEffectiveFrom(), "approved", t.isApproved(), "createdBy", t.getCreatedBy())).toList();
+                        "taxPercent", t.getTaxPercent(), "effectiveFrom", t.getEffectiveFrom(), "approved", t.isApproved(), "createdBy", t.getCreatedBy())).toList(), page, size);
     }
 
     /** Tarif versionné : jamais de modification rétroactive ; actif seulement après approbation par un autre utilisateur. */
@@ -451,6 +451,34 @@ public class AdminController {
         t.setCreatedBy(auth.getName());
         audit.log("TARIFF_CREATE", "service:" + r.serviceId(), r.grossAmount() + " " + r.eventType());
         return Map.of("id", tariffs.save(t).getId());
+    }
+
+    /** Un tarif non approuvé peut être corrigé ; un tarif approuvé est immuable (créer une nouvelle version). */
+    @PatchMapping("/tariffs/{id}")
+    @PreAuthorize(FIN)
+    public Map<String, Object> updateTariff(@PathVariable Long id, @RequestBody TariffReq r) {
+        var t = tariffs.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        if (t.isApproved()) throw new ResponseStatusException(HttpStatus.CONFLICT, "tarif approuvé : immuable, créer une nouvelle version");
+        if (r.grossAmount() != null) t.setGrossAmount(r.grossAmount());
+        if (r.operatorPercent() != null) t.setOperatorPercent(r.operatorPercent());
+        if (r.taxPercent() != null) t.setTaxPercent(r.taxPercent());
+        if (r.effectiveFrom() != null) {
+            if (r.effectiveFrom().isBefore(clock.instant().minusSeconds(60))) throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "pas de tarif rétroactif");
+            t.setEffectiveFrom(r.effectiveFrom());
+        }
+        audit.log("TARIFF_UPDATE", "tariff:" + id, t.getGrossAmount() + " " + t.getEventType());
+        tariffs.save(t);
+        return Map.of("id", id);
+    }
+
+    @DeleteMapping("/tariffs/{id}")
+    @PreAuthorize(FIN)
+    public ResponseEntity<Void> deleteTariff(@PathVariable Long id) {
+        var t = tariffs.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        if (t.isApproved()) throw new ResponseStatusException(HttpStatus.CONFLICT, "tarif approuvé : non supprimable");
+        tariffs.delete(t);
+        audit.log("TARIFF_DELETE", "tariff:" + id, null);
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/tariffs/{id}/approve")
@@ -475,10 +503,10 @@ public class AdminController {
     // ---------------------------------------------------------------- Messages (recherche)
     @GetMapping("/messages")
     @PreAuthorize(ANY)
-    public List<Map<String, Object>> messages(@RequestParam(required = false) String id, @RequestParam(required = false) String msisdn,
+    public ResponseEntity<List<Map<String, Object>>> messages(@RequestParam(required = false) String id, @RequestParam(required = false) String msisdn,
                                               @RequestParam(required = false) String operator, @RequestParam(required = false) String shortCode,
                                               @RequestParam(required = false) MtStatus status, @RequestParam(required = false) Instant from,
-                                              @RequestParam(required = false) Instant to) {
+                                              @RequestParam(required = false) Instant to, @RequestParam(required = false) Integer page, @RequestParam(required = false) Integer size) {
         Specification<MtMessage> spec = Specification.where(null);
         if (id != null && !id.isBlank()) spec = spec.and((r, q, b) -> b.equal(r.get("correlationId"), id));
         if (msisdn != null && !msisdn.isBlank()) { String m = Optional.ofNullable(Text.normalizeMsisdn(msisdn)).orElse(msisdn); spec = spec.and((r, q, b) -> b.equal(r.get("msisdn"), m)); }
@@ -488,39 +516,63 @@ public class AdminController {
         if (from != null) spec = spec.and((r, q, b) -> b.greaterThanOrEqualTo(r.get("createdAt"), from));
         if (to != null) spec = spec.and((r, q, b) -> b.lessThan(r.get("createdAt"), to));
         boolean full = hasAnyRole("SUPER_ADMIN", "SUPPORT");
-        return mts.findAll(spec, org.springframework.data.domain.PageRequest.of(0, 200, org.springframework.data.domain.Sort.by("createdAt").descending()))
-                .stream().map(m -> {
+        return Paging.of(mts.findAll(spec, Paging.req(page, size, org.springframework.data.domain.Sort.by("createdAt").descending()))
+                .map(m -> {
                     Map<String, Object> r = new LinkedHashMap<>();
                     r.put("id", m.getCorrelationId()); r.put("createdAt", m.getCreatedAt()); r.put("operator", m.getOperator().getCode());
                     r.put("msisdn", full ? m.getMsisdn() : mask(m.getMsisdn())); r.put("sender", m.getSender()); r.put("status", m.getStatus());
                     r.put("rawStatus", m.getRawStatus()); r.put("segments", m.getSegments()); r.put("attempts", m.getAttempts());
                     r.put("content", full ? m.getContent() : "***");
                     return r;
-                }).toList();
+                }));
     }
 
     // ---------------------------------------------------------------- Ledger, exports
-    @GetMapping("/ledger")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','FINANCE','AUDITOR')")
-    public List<Map<String, Object>> ledger(@RequestParam(required = false) BillingStatus status) {
-        return ledgerRows(status);
+    private Specification<LedgerEvent> ledgerSpec(BillingStatus status, Instant from, Instant to) {
+        Specification<LedgerEvent> spec = Specification.where(null);
+        if (status != null) spec = spec.and((r, q, b) -> b.equal(r.get("billingStatus"), status));
+        if (from != null) spec = spec.and((r, q, b) -> b.greaterThanOrEqualTo(r.get("createdAt"), from));
+        if (to != null) spec = spec.and((r, q, b) -> b.lessThan(r.get("createdAt"), to));
+        return spec;
     }
 
-    private List<Map<String, Object>> ledgerRows(BillingStatus status) {
-        return ledger.findAll().stream().filter(e -> status == null || e.getBillingStatus() == status).map(e -> {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("eventId", e.getEventId()); m.put("type", e.getEventType()); m.put("operator", e.getOperator().getCode());
-            m.put("service", e.getService() == null ? "" : e.getService().getName()); m.put("msisdn", mask(e.getMsisdn()));
-            m.put("gross", e.getGrossAmount()); m.put("operatorShare", e.getOperatorShare()); m.put("providerShare", e.getProviderShare());
-            m.put("partnerShare", e.getPartnerShare()); m.put("taxes", e.getTaxes()); m.put("status", e.getBillingStatus()); m.put("createdAt", e.getCreatedAt());
-            return m;
-        }).toList();
+    private static Map<String, Object> ledgerRow(LedgerEvent e) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("eventId", e.getEventId()); m.put("type", e.getEventType()); m.put("operator", e.getOperator().getCode());
+        m.put("service", e.getService() == null ? "" : e.getService().getName()); m.put("msisdn", mask(e.getMsisdn()));
+        m.put("gross", e.getGrossAmount()); m.put("operatorShare", e.getOperatorShare()); m.put("providerShare", e.getProviderShare());
+        m.put("partnerShare", e.getPartnerShare()); m.put("taxes", e.getTaxes()); m.put("status", e.getBillingStatus()); m.put("createdAt", e.getCreatedAt());
+        return m;
+    }
+
+    @GetMapping("/ledger")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','FINANCE','AUDITOR')")
+    public ResponseEntity<List<Map<String, Object>>> ledger(@RequestParam(required = false) BillingStatus status, @RequestParam(required = false) Instant from,
+                                                            @RequestParam(required = false) Instant to, @RequestParam(required = false) Integer page, @RequestParam(required = false) Integer size) {
+        return Paging.of(ledger.findAll(ledgerSpec(status, from, to), Paging.req(page, size, org.springframework.data.domain.Sort.by("createdAt").descending())).map(AdminController::ledgerRow));
+    }
+
+    /** Plafond d'un export en mémoire : au-delà, restreindre la période (le ledger peut compter des millions de lignes). */
+    static final int EXPORT_MAX_ROWS = 50_000;
+
+    private List<Map<String, Object>> ledgerRows(BillingStatus status, Instant from, Instant to) {
+        var spec = ledgerSpec(status, from, to);
+        if (ledger.count(spec) > EXPORT_MAX_ROWS)
+            throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "export limité à " + EXPORT_MAX_ROWS + " lignes : restreindre la période (from/to) ou le statut");
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (int p = 0; ; p++) { // lecture par pages de 2000 pour borner la mémoire de la requête
+            var page = ledger.findAll(spec, org.springframework.data.domain.PageRequest.of(p, 2000, org.springframework.data.domain.Sort.by("createdAt").descending()));
+            page.forEach(e -> rows.add(ledgerRow(e)));
+            if (!page.hasNext()) break;
+        }
+        return rows;
     }
 
     @GetMapping("/ledger/export")
     @PreAuthorize(FIN)
-    public ResponseEntity<byte[]> ledgerExport(@RequestParam(defaultValue = "csv") String format, @RequestParam(required = false) BillingStatus status) throws IOException {
-        var rows = ledgerRows(status);
+    public ResponseEntity<byte[]> ledgerExport(@RequestParam(defaultValue = "csv") String format, @RequestParam(required = false) BillingStatus status,
+                                               @RequestParam(required = false) Instant from, @RequestParam(required = false) Instant to) throws IOException {
+        var rows = ledgerRows(status, from, to);
         audit.log("LEDGER_EXPORT", "ledger", format);
         return Exports.respond(format, "ledger", "Ledger de facturation", rows);
     }
@@ -558,19 +610,26 @@ public class AdminController {
 
     @GetMapping("/reconciliation/{batch}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','FINANCE','AUDITOR')")
-    public List<Map<String, Object>> reconItems(@PathVariable String batch, @RequestParam(required = false) ReconResult result) {
-        return recon.findByBatchId(batch).stream().filter(i -> result == null || i.getResult() == result).map(i -> {
+    public ResponseEntity<List<Map<String, Object>>> reconItems(@PathVariable String batch, @RequestParam(required = false) ReconResult result, @RequestParam(required = false) Integer page, @RequestParam(required = false) Integer size) {
+        var pg = Paging.req(page, size, org.springframework.data.domain.Sort.by("id"));
+        return Paging.of((result == null ? recon.findByBatchId(batch, pg) : recon.findByBatchIdAndResult(batch, result, pg)).map(i -> {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", i.getId()); m.put("eventId", i.getEventId()); m.put("operatorAmount", i.getOperatorAmount());
             m.put("platformAmount", i.getPlatformAmount()); m.put("result", i.getResult()); m.put("comment", i.getComment());
-            return m;
-        }).toList();
+            return (Map<String, Object>) m;
+        }));
     }
 
     @GetMapping("/reconciliation/{batch}/export")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','FINANCE','AUDITOR')")
     public ResponseEntity<byte[]> reconExport(@PathVariable String batch, @RequestParam(defaultValue = "csv") String format) throws IOException {
-        return Exports.respond(format, "ecarts-" + batch, "Écarts de rapprochement " + batch, reconItems(batch, null).stream().filter(m -> m.get("result") != ReconResult.MATCHED).toList());
+        var all = new ArrayList<Map<String, Object>>();
+        for (int p = 0; ; p++) {
+            var pg = recon.findByBatchId(batch, org.springframework.data.domain.PageRequest.of(p, 2000, org.springframework.data.domain.Sort.by("id")));
+            pg.forEach(i -> { if (i.getResult() != ReconResult.MATCHED) { Map<String, Object> m = new LinkedHashMap<>(); m.put("eventId", i.getEventId()); m.put("operatorAmount", i.getOperatorAmount()); m.put("platformAmount", i.getPlatformAmount()); m.put("result", i.getResult()); m.put("comment", i.getComment()); all.add(m); } });
+            if (!pg.hasNext()) break;
+        }
+        return Exports.respond(format, "ecarts-" + batch, "Écarts de rapprochement " + batch, all);
     }
 
     public record CorrectionReq(String comment, BillingStatus newStatus) {}
@@ -611,8 +670,8 @@ public class AdminController {
 
     @GetMapping("/audit")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','AUDITOR')")
-    public List<AuditLog> audit() {
-        return auditRepo.findAll(org.springframework.data.domain.PageRequest.of(0, 500, org.springframework.data.domain.Sort.by("id").descending())).getContent();
+    public ResponseEntity<List<AuditLog>> audit(@RequestParam(required = false) Integer page, @RequestParam(required = false) Integer size) {
+        return Paging.of(auditRepo.findAll(Paging.req(page, size, org.springframework.data.domain.Sort.by("id").descending())));
     }
 
     public static String mask(String msisdn) {

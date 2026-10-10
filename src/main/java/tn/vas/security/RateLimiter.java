@@ -22,17 +22,41 @@ public interface RateLimiter {
         }
     }
 
+    /**
+     * Quotas partagés via Redis. Si Redis est injoignable : repli immédiat sur un compteur local par instance (le service API reste
+     * disponible, avec une limitation moins précise), journalisé et compté ; Redis n'est ré-essayé qu'après 10 s pour ne pas
+     * ajouter un délai de connexion à chaque requête.
+     */
     class Redis implements RateLimiter {
+        private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(Redis.class);
         private final StringRedisTemplate redis;
+        private final InMemory fallback = new InMemory();
+        private final io.micrometer.core.instrument.Counter fallbackCount;
+        private volatile long skipRedisUntil;
 
-        Redis(StringRedisTemplate redis) { this.redis = redis; }
+        Redis(StringRedisTemplate redis, io.micrometer.core.instrument.MeterRegistry metrics) {
+            this.redis = redis;
+            this.fallbackCount = metrics.counter("vas.ratelimit.fallback");
+        }
 
         @Override
         public boolean allow(String key, int perMinute) {
-            String k = "rl:" + key + ":" + System.currentTimeMillis() / 60000;
-            Long n = redis.opsForValue().increment(k);
-            if (n != null && n == 1L) redis.expire(k, Duration.ofSeconds(70));
-            return n != null && n <= perMinute;
+            if (System.currentTimeMillis() < skipRedisUntil) return local(key, perMinute);
+            try {
+                String k = "rl:" + key + ":" + System.currentTimeMillis() / 60000;
+                Long n = redis.opsForValue().increment(k);
+                if (n != null && n == 1L) redis.expire(k, Duration.ofSeconds(70));
+                return n != null && n <= perMinute;
+            } catch (RuntimeException e) {
+                skipRedisUntil = System.currentTimeMillis() + 10_000;
+                log.warn("Redis indisponible pour les quotas API : repli sur compteur local pendant 10 s ({})", e.getClass().getSimpleName());
+                return local(key, perMinute);
+            }
+        }
+
+        private boolean local(String key, int perMinute) {
+            fallbackCount.increment();
+            return fallback.allow(key, perMinute);
         }
     }
 
@@ -40,7 +64,7 @@ public interface RateLimiter {
     class Config {
         @Bean
         @ConditionalOnProperty(name = "vas.rate-limit", havingValue = "redis")
-        RateLimiter redisLimiter(StringRedisTemplate redis) { return new Redis(redis); }
+        RateLimiter redisLimiter(StringRedisTemplate redis, io.micrometer.core.instrument.MeterRegistry metrics) { return new Redis(redis, metrics); }
 
         @Bean
         @ConditionalOnProperty(name = "vas.rate-limit", havingValue = "memory", matchIfMissing = true)

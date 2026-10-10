@@ -23,7 +23,7 @@ export function Portal() {
             <Stat label={`${t('estimated')} (TND)`} value={data.estimatedPartnerAmount.toFixed(3)} />
             <Stat label={`${t('reconciled')} (TND)`} value={data.reconciledPartnerAmount.toFixed(3)} />
           </div>
-          {['csv', 'xlsx', 'pdf'].map((f) => <button key={f} className="btn sm" onClick={() => exp(f)}>{t('export')} {f.toUpperCase()}</button>)}
+          {['csv', 'xlsx', 'pdf'].map((f) => <button key={f} type="button" className="btn sm" onClick={() => exp(f)}>{t('export')} {f.toUpperCase()}</button>)}
           {data.services.map((s) => (
             <Card key={s.serviceId} title={s.service}>
               <div className="stats">
@@ -31,11 +31,11 @@ export function Portal() {
                 {Object.entries(s.mt).map(([k, v]) => <Stat key={'t' + k} label={'MT ' + k} value={v} />)}
                 <Stat label={t('deliveryRate')} value={pct(s.deliveryRate)} />
               </div>
-              <button className="btn sm" onClick={() => setSvc(s.serviceId)}>Résultats</button>
-              {svc === s.serviceId && <Table cols={['content', 'count']} rows={res.data} />}
+              <button type="button" className="btn sm" onClick={() => setSvc(s.serviceId)}>{t('results')}</button>
+              {svc === s.serviceId && <Table caption={t('results')} cols={['content', 'count']} rows={(res.data || []).map((r, i) => ({ id: i, ...r }))} />}
             </Card>
           ))}
-          <Card title={t('ledger')}><Table cols={['status', 'grossAmount', 'partnerShare', 'events']} rows={Object.entries(data.billingByStatus).map(([k, v]) => ({ status: k, ...v }))} /></Card>
+          <Card title={t('ledger')}><Table caption={t('ledger')} cols={['status', 'grossAmount', 'partnerShare', 'events']} rows={Object.entries(data.billingByStatus).map(([k, v]) => ({ id: k, status: k, ...v }))} /></Card>
         </>
       )}
     </>

@@ -3,7 +3,7 @@ import { api, login as apiLogin, clearCreds } from './api.js';
 import { LANGS, getLang, setLang, t } from './i18n.js';
 import * as P from './pages.jsx';
 import { Portal } from './portal.jsx';
-import { Flash } from './ui.jsx';
+import { Flash, ConfirmProvider } from './ui.jsx';
 
 const has = (me, ...roles) => roles.some((r) => me.roles.includes(r));
 
@@ -55,10 +55,11 @@ export default function App() {
   };
 
   const banner = env === 'dev' && <div className="devbanner" role="note">{t('devBanner')}</div>;
+  const skip = <a className="skip" href="#main">{t('skip')}</a>;
   const header = (
     <header>
       <b>{t('app')}</b>
-      <select aria-label="language" value={getLang()} onChange={(e) => changeLang(e.target.value)}>{Object.entries(LANGS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+      <select aria-label={t('language')} value={getLang()} onChange={(e) => changeLang(e.target.value)}>{Object.entries(LANGS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
       {me && <><span className="muted">{me.username} ({me.roles.join(', ')})</span><button className="btn sm" onClick={() => { clearCreds(); setMe(null); }}>{t('logout')}</button></>}
     </header>
   );
@@ -66,12 +67,12 @@ export default function App() {
   if (!me) {
     return (
       <>
-        {banner}{header}
-        <main><form className="card login" onSubmit={login}>
+        {skip}{banner}{header}
+        <main id="main"><form className="card login" onSubmit={login}>
           <h2>{t('login')}</h2>
-          <label>{t('username')}<input autoComplete="username" value={form.u} onChange={(e) => setForm({ ...form, u: e.target.value })} required /></label>
-          <label>{t('password')}<input type="password" autoComplete="current-password" value={form.p} onChange={(e) => setForm({ ...form, p: e.target.value })} required /></label>
-          {(needMfa || form.c) && <label>{t('totp')}<input inputMode="numeric" pattern="\d{6}" value={form.c} onChange={(e) => setForm({ ...form, c: e.target.value })} /></label>}
+          <div className="field"><label htmlFor="lg-u">{t('username')}</label><input id="lg-u" autoComplete="username" value={form.u} onChange={(e) => setForm({ ...form, u: e.target.value })} required /></div>
+          <div className="field"><label htmlFor="lg-p">{t('password')}</label><input id="lg-p" type="password" autoComplete="current-password" value={form.p} onChange={(e) => setForm({ ...form, p: e.target.value })} required /></div>
+          {(needMfa || form.c) && <div className="field"><label htmlFor="lg-c">{t('totp')}</label><input id="lg-c" inputMode="numeric" autoComplete="one-time-code" pattern="\d{6}" value={form.c} onChange={(e) => setForm({ ...form, c: e.target.value })} /></div>}
           <button className="btn">{t('login')}</button>
           <Flash error={err} />
           <button type="button" className="link" onClick={() => setNeedMfa(true)}>{t('totp')}</button>
@@ -85,12 +86,12 @@ export default function App() {
   items.push(['security', 'security', () => <P.Security me={me} onChanged={() => { clearCreds(); setMe(null); setNeedMfa(true); setErr(t('mfaReconnect')); }} />]);
   const current = items.find((i) => i[0] === page) || items[0];
   return (
-    <>
-      {banner}{header}
+    <ConfirmProvider>
+      {skip}{banner}{header}
       <div className="layout">
-        <nav>{items.map(([id, label]) => <button key={id} className={id === current[0] ? 'on' : ''} onClick={() => setPage(id)}>{t(label)}</button>)}</nav>
-        <main><h2>{t(current[1])}</h2>{current[2]()}</main>
+        <nav aria-label={t('navLabel')}>{items.map(([id, label]) => <button key={id} type="button" aria-current={id === current[0] ? 'page' : undefined} className={id === current[0] ? 'on' : ''} onClick={() => setPage(id)}>{t(label)}</button>)}</nav>
+        <main id="main"><h2>{t(current[1])}</h2>{current[2]()}</main>
       </div>
-    </>
+    </ConfirmProvider>
   );
 }

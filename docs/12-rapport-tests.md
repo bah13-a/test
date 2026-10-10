@@ -46,3 +46,8 @@ Connexion à un SMSC opérateur réel et recette opérateur ; Jasmin réel (le g
 
 ## 8. Profil `dev` démarré et piloté dans Chromium
 Bandeau « environnement de démonstration », connexion avec un compte de démonstration, tableau de bord alimenté (17 MO routés, 16 MT livrés, 1 non livré, taux de livraison 94 %), ledger de 14 événements, aucune erreur JavaScript.
+
+## 9. Intégration réelle et base de données (lot « 19 points »)
+- **Pile réelle** (PostgreSQL 16, Redis, RabbitMQ 3.12, Jasmin 0.10.13, simulateur SMSC) : `tests/integration/full-stack.mjs`, 21 vérifications, 0 échec - voir `14-tests-integration.md` (10 défauts trouvés et corrigés).
+- **Base de données** : mesures sur 2 M de lignes, avant/après index - voir `15-performance-base.md`.
+- **Repli Redis** : `RateLimiterTests` (Redis injoignable : service maintenu, quota local, pas d'attente).

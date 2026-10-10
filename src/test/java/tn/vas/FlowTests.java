@@ -270,7 +270,11 @@ class FlowTests {
                 .contentType(MediaType.APPLICATION_JSON).content(json)).andExpect(status().isOk()).andReturn();
         String id = new com.fasterxml.jackson.databind.ObjectMapper().readTree(res.getResponse().getContentAsString()).get("id").asText();
         mvc.perform(post("/admin/tariffs/" + id + "/approve").with(httpBasic("finance", PW))).andExpect(status().isForbidden());
+        // un tarif non approuvé est corrigeable ; approuvé, il devient immuable
+        mvc.perform(patch("/admin/tariffs/" + id).with(httpBasic("finance", PW)).contentType(MediaType.APPLICATION_JSON).content("{\"grossAmount\":0.75}")).andExpect(status().isOk());
         mvc.perform(post("/admin/tariffs/" + id + "/approve").with(httpBasic("finance2", PW))).andExpect(status().isOk());
+        mvc.perform(patch("/admin/tariffs/" + id).with(httpBasic("finance", PW)).contentType(MediaType.APPLICATION_JSON).content("{\"grossAmount\":9}")).andExpect(status().isConflict());
+        mvc.perform(delete("/admin/tariffs/" + id).with(httpBasic("finance", PW))).andExpect(status().isConflict());
     }
 
     Partner partner(String n) {
@@ -404,6 +408,26 @@ class FlowTests {
     @Autowired WebhookRepo webhooks;
     @Autowired AuditRepo auditRepo;
     @Autowired MtSweeper mtSweeper;
+
+    @Test
+    void listsArePaginatedWithTotalCountHeader() throws Exception {
+        for (int i = 0; i < 4; i++) mo(UUID.randomUUID().toString(), msisdn(), "VOTE P" + i);
+        var admin = httpBasic("admin", PW);
+        var page = mvc.perform(get("/admin/messages").param("size", "2").param("page", "0").with(admin)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2)).andExpect(header().exists("X-Total-Count")).andReturn();
+        long total = Long.parseLong(page.getResponse().getHeader("X-Total-Count"));
+        assertTrue(total >= 4);
+        var p1 = mvc.perform(get("/admin/messages").param("size", "2").param("page", "1").with(admin)).andReturn().getResponse().getContentAsString();
+        var p0 = page.getResponse().getContentAsString();
+        assertNotEquals(p0, p1, "page suivante différente");
+        mvc.perform(get("/admin/messages").param("size", "100000").with(admin)).andExpect(status().isOk()); // taille plafonnée à 500
+        mvc.perform(get("/admin/ledger").param("size", "1").param("status", "PENDING").with(httpBasic("finance", PW))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1)).andExpect(header().exists("X-Total-Count"));
+        mvc.perform(get("/admin/audit").param("size", "3").with(admin)).andExpect(status().isOk()).andExpect(header().exists("X-Total-Count"));
+        mvc.perform(get("/admin/services").param("size", "1").with(admin)).andExpect(jsonPath("$.length()").value(1)).andExpect(header().exists("X-Total-Count"));
+        // filtre de période sur le ledger
+        mvc.perform(get("/admin/ledger").param("from", Instant.now().plusSeconds(3600).toString()).with(httpBasic("finance", PW))).andExpect(jsonPath("$.length()").value(0));
+    }
 
     @Test
     void jasminSubmitAckAndTransientErrorsDoNotCorruptState() throws Exception {

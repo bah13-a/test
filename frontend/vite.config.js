@@ -5,6 +5,6 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   build: { outDir: '../src/main/resources/static', emptyOutDir: true },
-  server: { proxy: { '/admin': 'http://localhost:8080', '/portal': 'http://localhost:8080', '/api': 'http://localhost:8080' } },
-  test: { environment: 'node' },
+  server: { proxy: { '/admin': 'http://localhost:8080', '/portal': 'http://localhost:8080', '/api': 'http://localhost:8080', '/auth': 'http://localhost:8080' } },
+  test: { environment: 'jsdom', globals: true, setupFiles: './src/setup.js', include: ['src/**/*.test.{js,jsx}'] },
 });
