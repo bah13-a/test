@@ -1,0 +1,6 @@
+# Plages de numéros : « préfixe national (sans +216);opérateur » avec TT, ORANGE ou OOREDOO. Plus long préfixe gagnant.
+# Données OFFICIELLES uniquement (attribution des tranches par l'opérateur ou le régulateur) : aucune plage n'est livrée avec la plateforme.
+# Copier ce fichier en data/ranges.csv, décommenter/renseigner, puis ROUTING_RANGES_FILE=/data/ranges.csv dans le .env.
+prefix;operator
+# 2XX;OOREDOO
+# 9X;TT

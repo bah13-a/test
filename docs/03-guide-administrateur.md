@@ -2,7 +2,7 @@
 
 ## 1. Premier démarrage
 
-1. `cp .env.pro.example .env` et renseigner **tous** les champs (checklist : `13-profils-dev-pro.md`) ; jamais commité.
+1. `python3 tools/init-env.py` (génère `.env` avec des secrets aléatoires) puis renseigner **tous** les champs (checklist : `13-profils-dev-pro.md`) ; jamais commité.
 2. Générer le hash : `java -Dloader.main=tn.vas.tools.HashPassword -cp vas-platform-1.0.0.jar org.springframework.boot.loader.launch.PropertiesLauncher 'MotDePasse-Fort-123'` (sortie `{bcrypt}...`) à placer dans `ADMIN_PASSWORD_HASH`. Idem pour `PROMETHEUS_PASSWORD_HASH` (compte de scraping, rôle NOC).
 3. `docker compose up -d --build` (profil `pro`), puis `docker compose run --rm jasmin-provision`. Au premier démarrage (table `app_user` vide), les comptes `ADMIN_USER` et `prometheus` sont créés.
 4. Se connecter à `http(s)://<hôte>/`, **activer le MFA** (menu Sécurité) : obligatoire pour `SUPER_ADMIN` et `FINANCE` (sinon seules les pages d'enrôlement sont accessibles).
@@ -57,5 +57,5 @@ Mot de passe : 12 caractères minimum, lettres et chiffres. 5 échecs → verrou
 
 - **Nouveau compte** : le mot de passe saisi par l'administrateur est provisoire ; l'utilisateur doit le changer à sa première connexion (aucun autre écran avant). Une réinitialisation de mot de passe, un changement de rôle, une désactivation ou une réinitialisation du MFA ferment toutes les sessions du compte. Chacun peut fermer ses propres sessions (Sécurité / MFA → Sessions).
 - **Clôture mensuelle** (FINANCE) : rapprocher les relevés opérateur, puis Facturation → *Clôturer la période* (impossible tant qu'un événement est en attente ou contesté). Les corrections ultérieures passent par un *ajustement/remboursement*, jamais par une modification. Les reversements partenaires se créent par une personne et se marquent *payés* par une autre.
-- **`DATA_KEY`** : générer avec `openssl rand -base64 48`, la conserver dans le coffre de secrets **et** hors serveur. Changer la clé sans rechiffrer les données rend les numéros illisibles : prévoir une opération de rechiffrement (lecture avec l'ancienne clé, écriture avec la nouvelle) avant tout changement.
+- **`DATA_KEY`** : générer avec `openssl rand -base64 48`, la conserver dans le coffre de secrets **et** hors serveur. Changer la clé sans rechiffrer les données rend les numéros illisibles : utiliser l’outil `tn.vas.tools.Rekey` (simulation puis `--apply`, voir `19-configuration-env.md`) avant tout changement.
 - **Liaisons SMSC de secours** : `<OP>_SMSC_HOST_2` (jusqu'à `_4`) dans `.env`, puis relancer `provision.sh` ; `<OP>_LINK_MODE=failover` (défaut) ou `roundrobin`.

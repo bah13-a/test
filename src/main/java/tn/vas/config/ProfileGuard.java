@@ -19,6 +19,6 @@ public class ProfileGuard {
         if (dev && pro) throw new IllegalStateException("Profils 'dev' et 'pro' incompatibles : choisir l'un ou l'autre");
         if (Arrays.stream(active).noneMatch(ALLOWED::contains))
             throw new IllegalStateException("Aucun profil actif. Lancer avec SPRING_PROFILES_ACTIVE=dev (mocks, données fictives) "
-                    + "ou SPRING_PROFILES_ACTIVE=pro (données réelles, voir .env.pro.example)");
+                    + "ou SPRING_PROFILES_ACTIVE=pro (données réelles, voir .env.example)");
     }
 }

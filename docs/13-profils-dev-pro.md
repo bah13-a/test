@@ -24,7 +24,7 @@ Avertissements (journalisés) : préfixes MSISDN vides, short code absent, aucun
 
 ## Détails externes à fournir pour `pro` (checklist de mise en service)
 
-Tout se renseigne dans `.env` (modèle : `.env.pro.example`, chaque variable est commentée).
+Tout se renseigne dans `.env` (modèle : `.env.example`, chaque variable est commentée).
 
 | # | Information | D'où elle vient | Variables |
 |---|---|---|---|
@@ -49,8 +49,8 @@ Tout se renseigne dans `.env` (modèle : `.env.pro.example`, chaque variable est
 ## Procédure de mise en service `pro`
 
 ```bash
-cp .env.pro.example .env                    # renseigner TOUT (voir checklist) - fichier jamais commité
-mkdir -p certs secrets                      # certs/fullchain.pem, certs/privkey.pem ; secrets/prometheus_password
+python3 tools/init-env.py && python3 tools/check-env.py   # génère .env (secrets aléatoires) puis renseigner les valeurs réelles ; jamais commité
+mkdir -p certs secrets                      # certs/fullchain.pem, certs/privkey.pem 
 # Hash du mot de passe administrateur (aucun outil externe) :
 java -Dloader.main=tn.vas.tools.HashPassword -cp target/vas-platform-1.0.0.jar \
      org.springframework.boot.loader.launch.PropertiesLauncher 'MotDePasse-Fort-123'   # -> {bcrypt}$2a$... à coller dans ADMIN_PASSWORD_HASH
@@ -62,6 +62,6 @@ Puis : se connecter, **activer le MFA** (obligatoire), vérifier Opérateurs/Sho
 Comportement de la synchronisation `vas.operators` : au premier démarrage, la configuration s'applique à chaque opérateur ; ensuite le back-office fait foi (`OPERATORS_SYNC=create-only`). `OPERATORS_SYNC=overwrite` force la configuration à chaque démarrage (déploiements pilotés par le code).
 
 ## Ajouter un opérateur ou un paramètre
-1. `application-pro.yml` : un bloc `vas.operators[]` + variables dans `.env.pro.example`.
+1. `application-pro.yml` : un bloc `vas.operators[]` + variables dans `.env.example`.
 2. `infra/jasmin/provision.sh` : ajouter son préfixe de variables dans la boucle.
 3. Aucun changement de code métier : le routage MT/MO est piloté par les données (opérateur, short code, mot-clé).

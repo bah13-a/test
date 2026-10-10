@@ -19,7 +19,8 @@ import tn.vas.config.VasProperties;
 @Service
 public class TokenService {
     private static final Logger log = LoggerFactory.getLogger(TokenService.class);
-    public static final long TTL_SECONDS = 30 * 60;
+    public static final long DEFAULT_TTL_SECONDS = 30 * 60;
+    private long ttlSeconds = DEFAULT_TTL_SECONDS;
     private final byte[] secret;
     private final Clock clock;
 
@@ -27,8 +28,9 @@ public class TokenService {
     public record ApiParsed(long clientId) {}
     public static final long API_TTL_SECONDS = 3600;
 
-    public TokenService(VasProperties props, Clock clock) {
+    public TokenService(VasProperties props, Clock clock, @org.springframework.beans.factory.annotation.Value("${vas.session-ttl-minutes:30}") long ttlMinutes) {
         this.clock = clock;
+        this.ttlSeconds = Math.max(5, Math.min(ttlMinutes, 480)) * 60;
         String s = props.tokenSecret();
         if (s == null || s.length() < 24) {
             byte[] r = new byte[32];
@@ -46,7 +48,7 @@ public class TokenService {
 
     /** version = AppUser.tokenVersion : incrémentée pour révoquer d'un coup toutes les sessions du compte. */
     public String issue(String username, boolean mfa, int version) {
-        String body = username + "|" + (clock.instant().getEpochSecond() + TTL_SECONDS) + "|" + (mfa ? 1 : 0) + "|" + version;
+        String body = username + "|" + (clock.instant().getEpochSecond() + ttlSeconds) + "|" + (mfa ? 1 : 0) + "|" + version;
         String b = Base64.getUrlEncoder().withoutPadding().encodeToString(body.getBytes(StandardCharsets.UTF_8));
         return b + "." + sign(b);
     }
@@ -66,6 +68,8 @@ public class TokenService {
     }
 
     /** Jeton OAuth2 API (client_credentials) : "api|clientId|exp", signé sous un contexte distinct de celui des sessions admin. */
+    public long ttlSeconds() { return ttlSeconds; }
+
     public String issueApi(long clientId) {
         String b = Base64.getUrlEncoder().withoutPadding().encodeToString(("api|" + clientId + "|" + (clock.instant().getEpochSecond() + API_TTL_SECONDS)).getBytes(StandardCharsets.UTF_8));
         return b + "." + sign("api:" + b);

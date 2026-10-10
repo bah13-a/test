@@ -30,7 +30,9 @@ public class UserService implements UserDetailsService {
     private final VasProperties props;
     private final Clock clock;
 
-    public UserService(UserRepo users, PasswordEncoder encoder, VasProperties props, Clock clock) {
+    public UserService(UserRepo users, PasswordEncoder encoder, VasProperties props, Clock clock,
+                       @org.springframework.beans.factory.annotation.Value("${vas.password-min-length:12}") int minLength) {
+        minPasswordLength = Math.max(12, minLength); // jamais en dessous de 12
         this.users = users;
         this.encoder = encoder;
         this.props = props;
@@ -42,9 +44,11 @@ public class UserService implements UserDetailsService {
         return new AppUserDetails(users.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException("unknown")));
     }
 
+    private static volatile int minPasswordLength = 12;
+
     public static void checkPassword(String raw) {
-        if (raw == null || raw.length() < 12 || !raw.matches(".*\\d.*") || !raw.matches(".*[A-Za-z].*"))
-            throw new IllegalArgumentException("mot de passe : 12 caractères minimum, lettres et chiffres");
+        if (raw == null || raw.length() < minPasswordLength || !raw.matches(".*\\d.*") || !raw.matches(".*[A-Za-z].*"))
+            throw new IllegalArgumentException("mot de passe : " + minPasswordLength + " caractères minimum, lettres et chiffres");
     }
 
     @Transactional

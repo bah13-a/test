@@ -1,5 +1,5 @@
 # ============================ PROFIL PRO : DONNÉES RÉELLES ============================
-# Aucun mock. Tous les secrets viennent de l'environnement (voir .env.pro.example) et n'ont PAS de valeur par défaut :
+# Aucun mock. Tous les secrets viennent de l'environnement (voir .env.example) et n'ont PAS de valeur par défaut :
 # une variable manquante fait échouer le démarrage. ProductionGuard refuse en plus les valeurs faibles ou de démonstration.
 # Lancement : SPRING_PROFILES_ACTIVE=pro (ajouter ",json" pour les logs JSON Loki).
 spring:
@@ -7,7 +7,7 @@ spring:
     url: ${DB_URL}                      # jdbc:postgresql://host:5432/vas
     username: ${DB_USER}
     password: ${DB_PASSWORD}
-    hikari: { maximum-pool-size: 30, minimum-idle: 5, connection-timeout: 5000 }
+    hikari: { maximum-pool-size: "${DB_POOL_MAX:30}", minimum-idle: "${DB_POOL_MIN:5}", connection-timeout: 5000 }
   rabbitmq:
     host: ${RABBIT_HOST}
     port: ${RABBIT_PORT:5672}
@@ -21,12 +21,16 @@ spring:
       password: ${REDIS_PASSWORD:}
       timeout: 500ms            # lecture/écriture : ne jamais bloquer une requête API sur Redis
       connect-timeout: 1s
+logging:
+  level:
+    root: "${LOG_LEVEL_ROOT:INFO}"
+    tn.vas: "${LOG_LEVEL:INFO}"
 management:
   endpoint:
     health: { show-details: never }
 server:
   forward-headers-strategy: framework   # derrière le reverse proxy TLS
-  tomcat: { max-threads: 200 }
+  tomcat: { max-threads: "${SERVER_MAX_THREADS:200}" }
 vas:
   queue: rabbit
   rate-limit: redis
@@ -44,6 +48,32 @@ vas:
     max-attempts: ${MT_MAX_ATTEMPTS:5}
     backoff-seconds: ${MT_RETRY_BACKOFF_SECONDS:30}
   mo-dedup-seconds: ${MO_DEDUP_SECONDS:30}
+  # Comportement de la messagerie et des comptes (valeurs par défaut sûres ; tout est surchargeable depuis le .env)
+  session-ttl-minutes: ${SESSION_TTL_MINUTES:30}
+  password-min-length: ${PASSWORD_MIN_LENGTH:12}
+  auth-throttle: { per-minute: "${AUTH_THROTTLE_PER_MINUTE:20}" }
+  dlr-timeout-hours: ${DLR_TIMEOUT_HOURS:72}
+  rate-safety-factor: ${RATE_SAFETY_FACTOR:0.9}
+  subscription:
+    renewal-days: ${SUBSCRIPTION_RENEWAL_DAYS:30}
+    retry-days: ${SUBSCRIPTION_RETRY_DAYS:1}
+    max-failures: ${SUBSCRIPTION_MAX_FAILURES:3}
+    guard-days: ${SUBSCRIPTION_GUARD_DAYS:3}
+  mt-consumers: { transactional: "${MT_CONSUMERS_TRANSACTIONAL:4-8}", confirmation: "${MT_CONSUMERS_CONFIRMATION:2-4}", bulk: "${MT_CONSUMERS_BULK:1-2}" }
+  renewal-cron: "${RENEWAL_CRON:0 0 * * * *}"
+  retention-cron: "${RETENTION_CRON:0 30 2 * * *}"
+  projection-reconcile-cron: "${PROJECTION_RECONCILE_CRON:0 15 3 * * *}"
+  # Données chargées au démarrage depuis des fichiers (chemins dans le .env ; vide = rien)
+  bootstrap:
+    routing-ranges-file: ${ROUTING_RANGES_FILE:}
+    routing-ported-file: ${ROUTING_PORTED_FILE:}
+    catalog-file: ${CATALOG_FILE:}
+  # Format du relevé de facturation de chaque opérateur (import du rapprochement)
+  recon:
+    operators:
+      TT: { separator: "${TT_RECON_SEPARATOR:;}", id-column: "${TT_RECON_ID_COLUMN:event_id}", amount-column: "${TT_RECON_AMOUNT_COLUMN:amount}", status-column: "${TT_RECON_STATUS_COLUMN:status}", status-map: "${TT_RECON_STATUS_MAP:}", amount-divisor: "${TT_RECON_AMOUNT_DIVISOR:1}" }
+      ORANGE: { separator: "${ORANGE_RECON_SEPARATOR:;}", id-column: "${ORANGE_RECON_ID_COLUMN:event_id}", amount-column: "${ORANGE_RECON_AMOUNT_COLUMN:amount}", status-column: "${ORANGE_RECON_STATUS_COLUMN:status}", status-map: "${ORANGE_RECON_STATUS_MAP:}", amount-divisor: "${ORANGE_RECON_AMOUNT_DIVISOR:1}" }
+      OOREDOO: { separator: "${OOREDOO_RECON_SEPARATOR:;}", id-column: "${OOREDOO_RECON_ID_COLUMN:event_id}", amount-column: "${OOREDOO_RECON_AMOUNT_COLUMN:amount}", status-column: "${OOREDOO_RECON_STATUS_COLUMN:status}", status-map: "${OOREDOO_RECON_STATUS_MAP:}", amount-divisor: "${OOREDOO_RECON_AMOUNT_DIVISOR:1}" }
   # CQRS : réplica PostgreSQL pour le côté requête (lecture seule). Vide = une seule base.
   read-db:
     url: ${READ_DB_URL:}

@@ -1,6 +1,6 @@
-# Passerelle TLS (nginx). Variables d'environnement substituées par l'image (PUBLIC_HOSTNAME).
-limit_req_zone $binary_remote_addr zone=api:10m rate=30r/s;
-limit_req_zone $binary_remote_addr zone=login:10m rate=5r/m;
+# Passerelle TLS (nginx). Variables substituées par l'image : PUBLIC_HOSTNAME, PROXY_API_RATE, PROXY_LOGIN_RATE (ADMIN_ALLOWED_CIDRS : voir 40-admin-allow.sh).
+limit_req_zone $binary_remote_addr zone=api:10m rate=${PROXY_API_RATE}r/s;
+limit_req_zone $binary_remote_addr zone=login:10m rate=${PROXY_LOGIN_RATE}r/m;
 
 server {
   listen 80;
@@ -22,6 +22,17 @@ server {
   # Jamais exposés à l'extérieur : callbacks Jasmin (réseau interne direct vers app:8080), supervision, puits de dev
   location ~ ^/(callbacks|actuator|dev)(/|$) { return 404; }
 
+  # Back-office : restreint aux réseaux listés dans ADMIN_ALLOWED_CIDRS (VPN d'administration) ; vide = pas de restriction
+  location /admin/ {
+    include /etc/nginx/admin-allow.conf;
+    limit_req zone=api burst=100 nodelay;
+    proxy_pass http://app:8080;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 60s;
+  }
   location = /auth/login {
     limit_req zone=login burst=5 nodelay;
     proxy_pass http://app:8080;

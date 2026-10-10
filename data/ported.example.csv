@@ -1,0 +1,4 @@
+# Numéros portés : « numéro (8 chiffres ou +216...);opérateur actuel ». Exception exacte, prioritaire sur les plages.
+# Source : base de portabilité fournie par l'opérateur / le régulateur. Copier en data/ported.csv puis ROUTING_PORTED_FILE=/data/ported.csv.
+msisdn;operator
+# 98123456;ORANGE

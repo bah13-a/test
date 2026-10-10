@@ -4,6 +4,7 @@
 # Variables globales : JASMIN_PASSWORD CALLBACK_SECRET [JCLI_HOST=jasmin JCLI_PORT=8990 JCLI_USER=jcliadmin JCLI_PASSWORD APP_URL=http://app:8080 DRY_RUN=1]
 # Un opérateur dont SMSC_HOST est vide est ignoré. Usage : DRY_RUN=1 ./provision.sh | ./provision.sh
 set -euo pipefail
+source "$(cd "$(dirname "$0")" && pwd)/../lib/env.sh"   # .env unique (variables déjà exportées prioritaires)
 here="$(cd "$(dirname "$0")" && pwd)"
 : "${JASMIN_PASSWORD:?}" "${CALLBACK_SECRET:?}"
 APP_URL="${APP_URL:-http://app.vas.internal:8080}"

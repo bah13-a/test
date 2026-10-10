@@ -1,17 +1,17 @@
-# Pile PROFIL PRO (données réelles). Prérequis : .env (copié de .env.pro.example et renseigné), certificats dans ./certs,
-# secrets/prometheus_password. Pour la démonstration sans dépendance : docker-compose.dev.yml (profil dev, mocks).
+# Pile PROFIL PRO (données réelles). UN SEUL fichier de configuration : .env (créé par `tools/init-env.py` à partir de .env.example, contrôlé par
+# `tools/check-env.py`). Prérequis : certificats dans ./certs. Pour la démonstration sans dépendance : docker-compose.dev.yml (profil dev, mocks).
 name: vas-pro
 services:
   postgres:
     image: postgres:16
-    environment: { POSTGRES_DB: "${POSTGRES_DB:-vas}", POSTGRES_USER: "${DB_USER}", POSTGRES_PASSWORD: "${DB_PASSWORD:?DB_PASSWORD requis}", LANG: C.UTF-8 }
-    command: ["postgres", "-c", "max_connections=200", "-c", "wal_level=replica"]
+    environment: { POSTGRES_DB: "${POSTGRES_DB:-vas}", POSTGRES_USER: "${DB_USER}", POSTGRES_PASSWORD: "${DB_PASSWORD:?DB_PASSWORD requis}", LANG: C.UTF-8, TZ: "${TZ:-Africa/Tunis}" }
+    command: ["postgres", "-c", "max_connections=${POSTGRES_MAX_CONNECTIONS:-200}", "-c", "wal_level=replica"]
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck: { test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"], interval: 5s, retries: 20 }
     restart: unless-stopped
   redis:
     image: redis:7.2.2
-    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-}"]
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD requis}"]
     volumes: [redisdata:/data]
     restart: unless-stopped
   rabbitmq:
@@ -23,10 +23,18 @@ services:
   jasmin:
     image: jookies/jasmin:0.10
     environment:
+      # Jasmin lit ses réglages [section]_option dans l'environnement : ils viennent tous du .env (aucun mot de passe par défaut de l'image)
       REDIS_CLIENT_HOST: redis
+      REDIS_CLIENT_PORT: "6379"
+      REDIS_CLIENT_PASSWORD: "${REDIS_PASSWORD:?REDIS_PASSWORD requis}"
       AMQP_BROKER_HOST: rabbitmq
       AMQP_BROKER_PORT: "5672"
+      AMQP_BROKER_USERNAME: "${RABBIT_USER:?RABBIT_USER requis}"
+      AMQP_BROKER_PASSWORD: "${RABBIT_PASSWORD:?RABBIT_PASSWORD requis}"
+      JCLI_ADMIN_USERNAME: "${JCLI_USER:-jcliadmin}"
+      JCLI_ADMIN_PASSWORD: "${JCLI_PASSWORD_MD5:?JCLI_PASSWORD_MD5 requis (md5 de JCLI_PASSWORD, calculé par tools/init-env.py)}"
       ENABLE_PUBLISH_SUBMIT_SM_RESP: "1"
+      TZ: "${TZ:-Africa/Tunis}"
     depends_on: [redis, rabbitmq]
     volumes: [jasminconf:/etc/jasmin/store]
     restart: unless-stopped
@@ -38,8 +46,8 @@ services:
     profiles: ["provision"]
     env_file: .env
     environment: { APP_URL: "${VAS_PUBLIC_BASE_URL}", JCLI_HOST: jasmin, JCLI_PORT: "8990" }
-    volumes: ["./infra/jasmin:/jasmin:ro"]
-    entrypoint: ["sh", "-c", "apk add --no-cache bash netcat-openbsd >/dev/null && bash /jasmin/provision.sh"]
+    volumes: ["./infra:/infra:ro"]
+    entrypoint: ["sh", "-c", "apk add --no-cache bash netcat-openbsd >/dev/null && bash /infra/jasmin/provision.sh"]
     depends_on: [jasmin]
   app:
     build: .
@@ -48,6 +56,9 @@ services:
     networks: { default: { aliases: [app.vas.internal] } }
     environment:
       SPRING_PROFILES_ACTIVE: "${SPRING_PROFILES_ACTIVE:-pro,json}"
+      TZ: "${TZ:-Africa/Tunis}"
+    # données de démarrage (plages de numéros, numéros portés, catalogue) : déposer les fichiers dans ./data et y faire référence dans le .env (/data/...)
+    volumes: ["./data:/data:ro"]
     depends_on:
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
@@ -56,18 +67,25 @@ services:
   proxy:
     # Seul composant exposé : TLS, HSTS, /callbacks et /actuator bloqués depuis l'extérieur
     image: nginx:1.27-alpine
-    environment: { PUBLIC_HOSTNAME: "${PUBLIC_HOSTNAME:-localhost}" }
+    environment:
+      PUBLIC_HOSTNAME: "${PUBLIC_HOSTNAME:-localhost}"
+      ADMIN_ALLOWED_CIDRS: "${ADMIN_ALLOWED_CIDRS:-}"
+      PROXY_API_RATE: "${PROXY_API_RATE:-30}"
+      PROXY_LOGIN_RATE: "${PROXY_LOGIN_RATE:-5}"
+      TZ: "${TZ:-Africa/Tunis}"
     volumes:
       - ./infra/proxy/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./infra/proxy/40-admin-allow.sh:/docker-entrypoint.d/40-admin-allow.sh:ro
       - ./certs:/etc/nginx/certs:ro
-    ports: ["443:443", "80:80"]
+    ports: ["${HTTPS_PORT:-443}:443", "${HTTP_PORT:-80}:80"]
     depends_on: [app]
     restart: unless-stopped
   prometheus:
     image: prom/prometheus:v2.54.1
-    volumes:
-      - ./infra/prometheus:/etc/prometheus:ro
-      - ./secrets/prometheus_password:/etc/prometheus/scrape_password:ro
+    # mot de passe de scraping : PROMETHEUS_PASSWORD du .env (jamais un fichier à part)
+    environment: { PROMETHEUS_PASSWORD: "${PROMETHEUS_PASSWORD:?PROMETHEUS_PASSWORD requis}" }
+    volumes: ["./infra/prometheus:/etc/prometheus:ro"]
+    entrypoint: ["sh", "-c", "printf %s \"$$PROMETHEUS_PASSWORD\" > /tmp/scrape_password && exec /bin/prometheus --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus"]
     restart: unless-stopped
   alertmanager:
     image: prom/alertmanager:v0.27.0
@@ -99,6 +117,6 @@ services:
       - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on: [prometheus, loki]
-    ports: ["127.0.0.1:3000:3000"]   # accès via VPN d'administration / tunnel SSH uniquement
+    ports: ["${GRAFANA_BIND:-127.0.0.1}:3000:3000"]   # par défaut : accès via VPN d'administration / tunnel SSH uniquement
     restart: unless-stopped
 volumes: { pgdata: {}, redisdata: {}, rabbitdata: {}, jasminconf: {}, lokidata: {} }

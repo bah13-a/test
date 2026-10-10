@@ -20,4 +20,5 @@ USER vas
 COPY --from=build /src/target/vas-platform-1.0.0.jar /app/app.jar
 EXPOSE 8080
 HEALTHCHECK --interval=15s --timeout=3s --retries=5 CMD wget -qO- http://localhost:8080/actuator/health || exit 1
-ENTRYPOINT ["java","-XX:MaxRAMPercentage=75","-jar","/app/app.jar"]
+# JAVA_MAX_RAM_PERCENT et JAVA_OPTS viennent du .env
+ENTRYPOINT ["sh","-c","exec java -XX:MaxRAMPercentage=${JAVA_MAX_RAM_PERCENT:-75} ${JAVA_OPTS:-} -jar /app/app.jar"]

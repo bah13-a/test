@@ -175,5 +175,14 @@ await fetch(SIM + '/tps?v=0');
   ok(route.routed === true && route.operator === 'TT', 'routage : préfixes déclarés (TT_MSISDN_PREFIXES) pris en compte à défaut de plage importée');
 }
 
+// ---------- amorçage piloté par le .env (ROUTING_RANGES_FILE, ROUTING_PORTED_FILE, CATALOG_FILE) ----------
+{
+  const ranges = await A('/admin/routing/ranges');
+  ok(Array.isArray(ranges) && ranges.some((r) => r.prefix === '7777' && r.operator === 'ORANGE'), 'plages de routage chargées depuis ROUTING_RANGES_FILE');
+  const svcs = await A('/admin/services'), cat = Array.isArray(svcs) && svcs.find((x) => x.name === 'Service Catalogue');
+  ok(!!cat && cat.status === 'DRAFT', 'catalogue chargé depuis CATALOG_FILE : service créé en BROUILLON');
+  const tf = cat ? (await A('/admin/tariffs?serviceId=' + cat.id)) : [];
+  ok(Array.isArray(tf) && tf.length === 1 && tf[0].approved === false, 'tarif du catalogue non approuvé (double validation conservée)');
+}
 console.log(failed === 0 ? '\nINTÉGRATION COMPLÈTE : TOUT EST OK' : `\n${failed} ÉCHEC(S)`);
 process.exit(failed === 0 ? 0 : 1);

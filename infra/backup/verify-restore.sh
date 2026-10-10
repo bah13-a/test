@@ -2,6 +2,7 @@
 # Test de restauration automatisé (PRA, CDC §14.3 pt 7) : restaure la dernière sauvegarde dans une base temporaire,
 # vérifie le schéma et des volumes minimaux, mesure la durée (comparer au RTO ≤ 2 h) puis supprime la base temporaire.
 set -euo pipefail
+source "$(cd "$(dirname "$0")" && pwd)/../lib/env.sh"   # .env unique (variables déjà exportées prioritaires)
 : "${BACKUP_DIR:?}"
 latest="$(ls -1t "$BACKUP_DIR"/vas-*.dump.gpg | head -1)"
 tmpdb="vas_restore_test_$(date +%s)"

@@ -9,7 +9,11 @@ frontend/e2e*.png
 frontend/e2e-*.png
 src/main/resources/static/
 docs/chiffrage/__pycache__/
-secrets/
 certs/
 .env
 dump.rdb
+
+# Données de démarrage réelles (voir data/README.md) : seuls les modèles sont versionnés
+data/*
+!data/README.md
+!data/*.example.*

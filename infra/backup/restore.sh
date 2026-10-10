@@ -2,6 +2,7 @@
 # Restauration d'une sauvegarde chiffrée vers une base cible. Usage : restore.sh <fichier.dump.gpg> <base_cible>
 # Requiert la clé privée GPG. Ne remplace JAMAIS la base de production sans --force-prod.
 set -euo pipefail
+source "$(cd "$(dirname "$0")" && pwd)/../lib/env.sh"   # .env unique (variables déjà exportées prioritaires)
 file="${1:?fichier}" target="${2:?base cible}"
 [[ "$target" == "vas" && "${3:-}" != "--force-prod" ]] && { echo "refus : cible 'vas' (production) sans --force-prod" >&2; exit 2; }
 sha256sum -c "$file.sha256"

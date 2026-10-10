@@ -60,13 +60,13 @@ public class RabbitMtQueue implements MtQueue {
 
         Consumers(MtDispatcher d) { this.dispatcher = d; }
 
-        @RabbitListener(queues = "vas.mt.transactional", concurrency = "4-8")
+        @RabbitListener(queues = "vas.mt.transactional", concurrency = "${vas.mt-consumers.transactional:4-8}")
         void tx(String id) { dispatcher.dispatch(id); }
 
-        @RabbitListener(queues = "vas.mt.confirmation", concurrency = "2-4")
+        @RabbitListener(queues = "vas.mt.confirmation", concurrency = "${vas.mt-consumers.confirmation:2-4}")
         void conf(String id) { dispatcher.dispatch(id); }
 
-        @RabbitListener(queues = "vas.mt.bulk", concurrency = "1-2")
+        @RabbitListener(queues = "vas.mt.bulk", concurrency = "${vas.mt-consumers.bulk:1-2}")
         void bulk(String id) { dispatcher.dispatch(id); }
     }
 }

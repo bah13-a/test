@@ -15,9 +15,11 @@ La gateway ne contient aucune logique métier : l'interface `SmsGateway` la rend
 
 L'application **exige un profil explicite** (sinon elle refuse de démarrer). Détail, checklist des informations externes et procédure : [`docs/13-profils-dev-pro.md`](docs/13-profils-dev-pro.md).
 
+Toute la configuration réelle (secrets, opérateurs, domaine, alertes, sauvegardes, données de démarrage) tient dans **un seul fichier `.env`** : [`docs/19-configuration-env.md`](docs/19-configuration-env.md).
+
 | | `dev` - démonstration / tests | `pro` - production |
 |---|---|---|
-| Lancer | `cd frontend && npm ci && npm run build && cd .. && mvn spring-boot:run -Dspring-boot.run.profiles=dev` ou `docker compose -f docker-compose.dev.yml up --build` | `cp .env.pro.example .env` (tout renseigner) → `docker compose up -d --build` → `docker compose run --rm jasmin-provision` |
+| Lancer | `cd frontend && npm ci && npm run build && cd .. && mvn spring-boot:run -Dspring-boot.run.profiles=dev` ou `docker compose -f docker-compose.dev.yml up --build` | `python3 tools/init-env.py` → renseigner `.env` → `python3 tools/check-env.py` → `docker compose up -d --build` → `docker compose run --rm jasmin-provision` |
 | Dépendances | aucune (H2, file mémoire) | PostgreSQL, RabbitMQ, Redis, Jasmin, VPN opérateurs |
 | Gateway | **mock** avec DLR automatiques, panne simulable, faux relevé opérateur, puits de webhooks signés | **Jasmin réel** vers les SMSC des opérateurs |
 | Données | démonstration (opérateurs, short codes, services, tarifs, 1 compte par rôle, 24 MO simulés) | **aucune** donnée fictive ; opérateurs/short codes issus de `.env` |
@@ -51,7 +53,7 @@ Provisionnement Jasmin : `infra/jasmin/provision.sh` (variables `TT_*`, `ORANGE_
 | **E** Back-office | React (FR/AR/EN, RTL, responsive) : tableau de bord, campagnes, facturation, opérateurs, short codes, services/mots-clés/réponses, partenaires, tarifs, messages, ledger, rapprochement, listes, support/consentements, utilisateurs, clients API, audit, MFA ; 7 rôles RBAC ; exports |
 | **F** Portail partenaire | rôle `PARTNER` isolé : volumes, taux de livraison, résultats par contenu, montants estimés vs rapprochés, exports |
 | **G** HA / supervision | métriques Prometheus + dashboard Grafana + alertes ; logs JSON + Loki ; topologie HA de référence ; sauvegarde GPG, restauration et test de restauration scriptés **et exécutés** |
-| **H** Documentation | `docs/` : HLD, LLD, moteurs/facturation/comptes (16), architecture CQRS (17), points techniques traités (18), guides admin/NOC/utilisateur, PRA, rapport de sécurité, dictionnaire de données, licences, formation/PV, matrice de recette, rapport de tests, fiche opérateur, OpenAPI |
+| **H** Documentation | `docs/` : HLD, LLD, moteurs/facturation/comptes (16), architecture CQRS (17), points techniques traités (18), configuration par un seul `.env` (19), guides admin/NOC/utilisateur, PRA, rapport de sécurité, dictionnaire de données, licences, formation/PV, matrice de recette, rapport de tests, fiche opérateur, OpenAPI |
 
 Architecture **CQRS** (côté requête sur modèles de lecture et réplica optionnel, règles vérifiées par ArchUnit) ; rotation de clé (`Rekey`), freinage des échecs d'authentification, anti-SSRF au niveau de la connexion.
 

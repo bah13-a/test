@@ -46,8 +46,9 @@ public class ReadReplicaConfig {
         primary.setPoolName("vas-primary");
         HikariDataSource replica = new HikariDataSource();
         replica.setJdbcUrl(url);
-        replica.setUsername(user);
-        replica.setPassword(password);
+        // variables vides (.env : READ_DB_USER=) = identifiants de la base primaire
+        replica.setUsername(user == null || user.isBlank() ? primaryProps.determineUsername() : user);
+        replica.setPassword(password == null || password.isBlank() ? primaryProps.determinePassword() : password);
         replica.setReadOnly(true);
         replica.setPoolName("vas-replica");
         // la connexion n'est prise qu'à la première requête : l'indicateur « lecture seule » de la transaction est alors connu

@@ -20,6 +20,12 @@ public class ProductionGuard {
 
     public ProductionGuard(VasProperties p, Environment env) {
         List<String> errors = new ArrayList<>(validate(p, env.getProperty("spring.datasource.url", "")));
+        for (String[] f : new String[][]{{"vas.bootstrap.routing-ranges-file", "ROUTING_RANGES_FILE"}, {"vas.bootstrap.routing-ported-file", "ROUTING_PORTED_FILE"}, {"vas.bootstrap.catalog-file", "CATALOG_FILE"}}) {
+            String path = env.getProperty(f[0], "");
+            if (!path.isBlank() && !java.nio.file.Files.isReadable(java.nio.file.Path.of(path))) errors.add(f[1] + " : fichier introuvable ou illisible (" + path + ")");
+        }
+        long ttl = Long.parseLong(env.getProperty("vas.session-ttl-minutes", "30"));
+        if (ttl < 5 || ttl > 480) errors.add("SESSION_TTL_MINUTES : entre 5 et 480");
         if (weak(env.getProperty("vas.data-key"), 32)) errors.add("DATA_KEY : 32 caractères minimum, sans valeur d'exemple (chiffrement des numéros ; à sauvegarder hors serveur)");
         validateWarnings(p).forEach(w -> log.warn("[pro] {}", w));
         if (!errors.isEmpty()) {

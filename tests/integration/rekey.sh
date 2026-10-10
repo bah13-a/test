@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Rotation de DATA_KEY sur la pile réelle (PostgreSQL) : arrêt de l'application, simulation, réécriture, reprise, redémarrage avec la nouvelle clé,
-# puis lecture réelle des numéros par l'application. Prérequis : pile démarrée par `local-stack.sh up|test` avec la clé par défaut.
+# puis lecture réelle des numéros par l'application. Prérequis : pile démarrée par `local-stack.sh up|test` (valeurs lues dans le .env généré, ENVF).
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")/../.." && pwd)"; JAR="$HERE/target/vas-platform-1.0.0.jar"
-OLD="${OLD_DATA_KEY:-Zx9-data-key-integration-0123456789abcdefghijklmnop}"; NEW="Zx9-NOUVELLE-cle-rotation-0123456789abcdefghijklm"
-export DB_URL=jdbc:postgresql://localhost:5433/vas DB_USER=vas DB_PASSWORD=Zx9-db-real-password
+ENVF="${ENVF:-/tmp/vas-it.env}"
+# shellcheck source=../../infra/lib/env.sh
+ENV_FILE="$ENVF" . "$HERE/infra/lib/env.sh"
+OLD="$DATA_KEY"; NEW="Zx9-NOUVELLE-cle-rotation-0123456789abcdefghijklm"
 fail=0; ok() { echo "OK    $1"; }; ko() { echo "ECHEC $1"; fail=1; }
 rekey() { OLD_DATA_KEY="$OLD" NEW_DATA_KEY="$NEW" java -Dloader.main=tn.vas.tools.Rekey -cp "$JAR" org.springframework.boot.loader.launch.PropertiesLauncher "$@" 2>&1 | grep -v "^Picked up"; }
 before=$(psql -h /tmp -p 5433 -U postgres -d vas -Atc "select count(*) from mt_message where msisdn like 'enc:v1:%'")

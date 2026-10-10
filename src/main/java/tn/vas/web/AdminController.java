@@ -52,12 +52,14 @@ public class AdminController {
     private final Clock clock;
     private final UrlGuard urlGuard;
     private final org.springframework.security.crypto.password.PasswordEncoder enc;
+    private final tn.vas.config.ReconProperties reconFormats;
 
     public AdminController(OperatorRepo operators, ShortCodeRepo shortCodes, PartnerRepo partners, ServiceRepo services,
                            KeywordRepo keywords, TariffRepo tariffs, LedgerRepo ledger, ReconRepo recon, MtRepo mts, MoRepo mos,
                            ConsentRepo consents, SubscriptionRepo subs, AuditRepo auditRepo, ApiClientRepo apiClients,
                            ReplyRepo replies, RuleRepo rules, UserRepo users, UserService userService, AuditService audit,
-                           ReconciliationService reconService, SubscriptionService subscriptionService, Clock clock, UrlGuard urlGuard, org.springframework.security.crypto.password.PasswordEncoder enc) {
+                           ReconciliationService reconService, SubscriptionService subscriptionService, Clock clock, UrlGuard urlGuard, org.springframework.security.crypto.password.PasswordEncoder enc, tn.vas.config.ReconProperties reconFormats) {
+        this.reconFormats = reconFormats;
         this.urlGuard = urlGuard; this.enc = enc;
         this.operators = operators; this.shortCodes = shortCodes; this.partners = partners; this.services = services;
         this.keywords = keywords; this.tariffs = tariffs; this.ledger = ledger; this.recon = recon; this.mts = mts; this.mos = mos;
@@ -526,13 +528,23 @@ public class AdminController {
     @PostMapping(value = "/reconciliation/{operatorCode}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize(FIN)
     public Map<String, Object> reconcile(@PathVariable String operatorCode, @RequestParam("file") MultipartFile file,
-                                         @RequestParam(defaultValue = ";") char separator, @RequestParam Instant from, @RequestParam Instant to,
-                                         @RequestParam(defaultValue = "event_id") String idColumn, @RequestParam(defaultValue = "amount") String amountColumn,
-                                         @RequestParam(defaultValue = "status") String statusColumn) throws IOException {
+                                         @RequestParam(required = false) Character separator, @RequestParam Instant from, @RequestParam Instant to,
+                                         @RequestParam(required = false) String idColumn, @RequestParam(required = false) String amountColumn,
+                                         @RequestParam(required = false) String statusColumn) throws IOException {
         var op = operators.findByCode(operatorCode).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        // paramètres de la requête > format de l'opérateur défini dans le .env ({OP}_RECON_*) > valeurs par défaut
+        var fmt = reconFormats.of(op.getCode());
         List<StatementParser.Row> rows;
         try {
-            rows = StatementParser.parse(file.getInputStream(), file.getOriginalFilename(), separator, new StatementParser.Mapping(idColumn, amountColumn, statusColumn));
+            char sep = separator != null ? separator : (fmt.separator() == null || fmt.separator().isEmpty() ? ';' : fmt.separator().charAt(0));
+            var mapping = new StatementParser.Mapping(first(idColumn, fmt.idColumn(), "event_id"), first(amountColumn, fmt.amountColumn(), "amount"), first(statusColumn, fmt.statusColumn(), "status"));
+            rows = StatementParser.parse(file.getInputStream(), file.getOriginalFilename(), sep, mapping);
+            var table = fmt.statusTable();
+            var div = fmt.amountDivisor() == null || fmt.amountDivisor().signum() <= 0 ? BigDecimal.ONE : fmt.amountDivisor();
+            if (!table.isEmpty() || div.compareTo(BigDecimal.ONE) != 0) {
+                rows = rows.stream().map(r -> new StatementParser.Row(r.eventId(), r.amount().divide(div, 3, java.math.RoundingMode.HALF_UP),
+                        r.status() == null ? null : table.getOrDefault(r.status().trim().toUpperCase(Locale.ROOT), r.status()))).toList();
+            }
         } catch (RuntimeException e) {
             throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "relevé illisible : " + e.getMessage());
         }
@@ -540,6 +552,11 @@ public class AdminController {
         Map<String, Long> summary = new TreeMap<>();
         recon.findByBatchId(batch).forEach(i -> summary.merge(i.getResult().name(), 1L, Long::sum));
         return Map.of("batch", batch, "summary", summary);
+    }
+
+    private static String first(String... v) {
+        for (String x : v) if (x != null && !x.isBlank()) return x;
+        return null;
     }
 
     public record CorrectionReq(String comment, BillingStatus newStatus) {}

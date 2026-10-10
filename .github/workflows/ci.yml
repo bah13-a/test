@@ -12,6 +12,18 @@ jobs:
       - name: Analyse des dépendances vulnérables
         run: mvn -B org.owasp:dependency-check-maven:check -DfailBuildOnCVSS=9 -DskipTests
         continue-on-error: true
+  config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Modèle .env.example cohérent (structure, aucun secret)
+        run: python3 tools/check-env.py --file .env.example --sample
+      - name: Génération d'un .env et validation complète
+        run: |
+          python3 tools/init-env.py --out /tmp/ci.env
+          python3 tools/check-env.py --file /tmp/ci.env --sample
+      - name: Docker Compose valide avec ce .env
+        run: cp /tmp/ci.env .env && docker compose config -q && docker compose -f docker-compose.yml -f infra/ha/docker-compose.ha.yml config -q
   frontend:
     runs-on: ubuntu-latest
     steps:

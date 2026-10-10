@@ -1,0 +1,14 @@
+{
+  "_commentaire": "Catalogue initial créé au démarrage s'il n'existe pas déjà (par nom). Services créés en BROUILLON (à activer dans le back-office) ; tarifs créés NON APPROUVÉS : une seconde personne FINANCE doit les approuver (4 yeux). Copier en data/catalog.json puis CATALOG_FILE=/data/catalog.json.",
+  "partners": [
+    { "name": "Partenaire Exemple", "sharePercent": 30, "webhookUrl": "https://partenaire.example.tn/hooks/vas", "maxTps": 0 }
+  ],
+  "services": [
+    {
+      "name": "Vote Exemple", "type": "VOTE", "operator": "TT", "shortCode": "85500", "partner": "Partenaire Exemple",
+      "consentMode": "SIMPLE_OPT_IN", "defaultLang": "fr", "regulated": false, "maxActionsPerMsisdn": 1,
+      "keywords": ["VOTE"],
+      "tariffs": [ { "eventType": "MT", "grossAmount": 0.5, "operatorPercent": 40, "taxPercent": 19 } ]
+    }
+  ]
+}

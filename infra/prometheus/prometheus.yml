@@ -5,5 +5,5 @@ alerting:
 scrape_configs:
   - job_name: vas-app
     metrics_path: /actuator/prometheus
-    basic_auth: { username: prometheus, password_file: /etc/prometheus/scrape_password }
+    basic_auth: { username: prometheus, password_file: /tmp/scrape_password }
     static_configs: [{ targets: ["app:8080"] }]
