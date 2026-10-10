@@ -63,7 +63,7 @@ public class MoService {
 
     @Transactional
     public MoOutcome handle(String connector, String from, String to, String content, String operatorMsgId) {
-        Operator op = operators.findByJasminConnector(connector)
+        Operator op = operators.findByJasminConnector(connector == null ? null : connector.replaceFirst("_[2-9]$", "")) // liaisons secondaires : smppc_tt_2 -> smppc_tt
                 .or(() -> operators.findByCode(connector == null ? "" : connector.toUpperCase(Locale.ROOT)))
                 .orElseThrow(() -> new IllegalArgumentException("Opérateur/connecteur inconnu : " + connector));
         String msisdn = Text.normalizeMsisdn(from);

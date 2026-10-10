@@ -6,7 +6,7 @@
  },
  "servers": [
   {
-   "url": "http://localhost:18081",
+   "url": "http://localhost:18090",
    "description": "Generated server url"
   }
  ],
@@ -45,7 +45,23 @@
      {
       "name": "content",
       "in": "query",
-      "required": true,
+      "required": false,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "binary",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "coding",
+      "in": "query",
+      "required": false,
       "schema": {
        "type": "string"
       }
@@ -105,7 +121,23 @@
      {
       "name": "content",
       "in": "query",
-      "required": true,
+      "required": false,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "binary",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "coding",
+      "in": "query",
+      "required": false,
       "schema": {
        "type": "string"
       }
@@ -275,6 +307,85 @@
     }
    }
   },
+  "/oauth/token": {
+   "post": {
+    "tags": [
+     "o-auth-controller"
+    ],
+    "operationId": "token",
+    "parameters": [
+     {
+      "name": "grant_type",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "client_id",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "client_secret",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/auth/login": {
+   "post": {
+    "tags": [
+     "auth-controller"
+    ],
+    "operationId": "login",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/LoginRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/api/v1/subscriptions": {
    "post": {
     "tags": [
@@ -339,12 +450,141 @@
     }
    }
   },
+  "/api/v1/content/{serviceId}/links": {
+   "post": {
+    "tags": [
+     "api-controller"
+    ],
+    "operationId": "contentLink",
+    "parameters": [
+     {
+      "name": "serviceId",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/LinkRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "$ref": "#/components/schemas/MessageView"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/vote/options": {
+   "get": {
+    "tags": [
+     "engine-admin-controller"
+    ],
+    "operationId": "voteOptions",
+    "parameters": [
+     {
+      "name": "serviceId",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "object"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "engine-admin-controller"
+    ],
+    "operationId": "addOption",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/OptionReq"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/admin/users": {
    "get": {
     "tags": [
      "admin-controller"
     ],
     "operationId": "listUsers",
+    "parameters": [
+     {
+      "name": "page",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "format": "int32"
+      }
+     },
+     {
+      "name": "size",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "format": "int32"
+      }
+     }
+    ],
     "responses": {
      "200": {
       "description": "OK",
@@ -410,6 +650,24 @@
       "schema": {
        "type": "integer",
        "format": "int64"
+      }
+     },
+     {
+      "name": "page",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "format": "int32"
+      }
+     },
+     {
+      "name": "size",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "format": "int32"
       }
      }
     ],
@@ -530,144 +788,32 @@
     }
    }
   },
-  "/admin/sim/mo": {
-   "post": {
-    "tags": [
-     "simulator-controller"
-    ],
-    "operationId": "mo_2",
-    "parameters": [
-     {
-      "name": "connector",
-      "in": "query",
-      "required": true,
-      "schema": {
-       "type": "string"
-      }
-     },
-     {
-      "name": "from",
-      "in": "query",
-      "required": true,
-      "schema": {
-       "type": "string"
-      }
-     },
-     {
-      "name": "to",
-      "in": "query",
-      "required": true,
-      "schema": {
-       "type": "string"
-      }
-     },
-     {
-      "name": "content",
-      "in": "query",
-      "required": true,
-      "schema": {
-       "type": "string"
-      }
-     },
-     {
-      "name": "id",
-      "in": "query",
-      "required": false,
-      "schema": {
-       "type": "string"
-      }
-     }
-    ],
-    "responses": {
-     "200": {
-      "description": "OK",
-      "content": {
-       "*/*": {
-        "schema": {
-         "type": "object",
-         "additionalProperties": {
-          "type": "object"
-         }
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/admin/sim/link-down": {
-   "post": {
-    "tags": [
-     "simulator-controller"
-    ],
-    "operationId": "linkDown",
-    "parameters": [
-     {
-      "name": "sends",
-      "in": "query",
-      "required": false,
-      "schema": {
-       "type": "integer",
-       "format": "int32",
-       "default": 3
-      }
-     }
-    ],
-    "responses": {
-     "200": {
-      "description": "OK"
-     }
-    }
-   }
-  },
-  "/admin/sim/dlr": {
-   "post": {
-    "tags": [
-     "simulator-controller"
-    ],
-    "operationId": "dlr_2",
-    "parameters": [
-     {
-      "name": "cid",
-      "in": "query",
-      "required": true,
-      "schema": {
-       "type": "string"
-      }
-     },
-     {
-      "name": "status",
-      "in": "query",
-      "required": false,
-      "schema": {
-       "type": "string",
-       "default": "DELIVRD"
-      }
-     }
-    ],
-    "responses": {
-     "200": {
-      "description": "OK",
-      "content": {
-       "*/*": {
-        "schema": {
-         "type": "object",
-         "additionalProperties": {
-          "type": "object"
-         }
-        }
-       }
-      }
-     }
-    }
-   }
-  },
   "/admin/shortcodes": {
    "get": {
     "tags": [
      "admin-controller"
     ],
     "operationId": "shortCodes",
+    "parameters": [
+     {
+      "name": "page",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "format": "int32"
+      }
+     },
+     {
+      "name": "size",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "format": "int32"
+      }
+     }
+    ],
     "responses": {
      "200": {
       "description": "OK",
@@ -758,6 +904,26 @@
      "admin-controller"
     ],
     "operationId": "services_2",
+    "parameters": [
+     {
+      "name": "page",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "format": "int32"
+      }
+     },
+     {
+      "name": "size",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "format": "int32"
+      }
+     }
+    ],
     "responses": {
      "200": {
       "description": "OK",
@@ -891,12 +1057,66 @@
     }
    }
   },
+  "/admin/services/{id}/close": {
+   "post": {
+    "tags": [
+     "engine-admin-controller"
+    ],
+    "operationId": "close",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/admin/rules": {
    "get": {
     "tags": [
      "admin-controller"
     ],
     "operationId": "rules",
+    "parameters": [
+     {
+      "name": "page",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "format": "int32"
+      }
+     },
+     {
+      "name": "size",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "format": "int32"
+      }
+     }
+    ],
     "responses": {
      "200": {
       "description": "OK",
@@ -1053,12 +1273,100 @@
     }
    }
   },
+  "/admin/quiz/questions": {
+   "get": {
+    "tags": [
+     "engine-admin-controller"
+    ],
+    "operationId": "quizQuestions",
+    "parameters": [
+     {
+      "name": "serviceId",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "object"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "engine-admin-controller"
+    ],
+    "operationId": "addQuestion",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/QuestionReq"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/admin/partners": {
    "get": {
     "tags": [
      "admin-controller"
     ],
     "operationId": "partners",
+    "parameters": [
+     {
+      "name": "page",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "format": "int32"
+      }
+     },
+     {
+      "name": "size",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "format": "int32"
+      }
+     }
+    ],
     "responses": {
      "200": {
       "description": "OK",
@@ -1088,6 +1396,39 @@
       "application/json": {
        "schema": {
         "$ref": "#/components/schemas/PartnerReq"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/me/password": {
+   "post": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "changePassword",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PasswordReq"
        }
       }
      },
@@ -1149,6 +1490,29 @@
      },
      "required": true
     },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/me/logout-all": {
+   "post": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "logoutAll",
     "responses": {
      "200": {
       "description": "OK",
@@ -1234,12 +1598,325 @@
     }
    }
   },
+  "/admin/content/items": {
+   "get": {
+    "tags": [
+     "engine-admin-controller"
+    ],
+    "operationId": "contentItems",
+    "parameters": [
+     {
+      "name": "serviceId",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "object"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "engine-admin-controller"
+    ],
+    "operationId": "addItem",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ItemReq"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/billing/periods": {
+   "get": {
+    "tags": [
+     "billing-controller"
+    ],
+    "operationId": "periods",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "object"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "billing-controller"
+    ],
+    "operationId": "close_1",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PeriodReq"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/billing/payouts": {
+   "get": {
+    "tags": [
+     "billing-controller"
+    ],
+    "operationId": "payouts",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "object"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "billing-controller"
+    ],
+    "operationId": "createPayout",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PayoutReq"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/billing/payouts/{id}/pay": {
+   "post": {
+    "tags": [
+     "billing-controller"
+    ],
+    "operationId": "pay",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PayReq"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/billing/payouts/{id}/cancel": {
+   "post": {
+    "tags": [
+     "billing-controller"
+    ],
+    "operationId": "cancel",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/billing/adjustments": {
+   "post": {
+    "tags": [
+     "billing-controller"
+    ],
+    "operationId": "adjust",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/AdjustReq"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/admin/api-clients": {
    "get": {
     "tags": [
      "admin-controller"
     ],
     "operationId": "apiClients",
+    "parameters": [
+     {
+      "name": "page",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "format": "int32"
+      }
+     },
+     {
+      "name": "size",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "format": "int32"
+      }
+     }
+    ],
     "responses": {
      "200": {
       "description": "OK",
@@ -1306,14 +1983,6 @@
        "type": "integer",
        "format": "int64"
       }
-     },
-     {
-      "name": "enc",
-      "in": "query",
-      "required": true,
-      "schema": {
-       "$ref": "#/components/schemas/PasswordEncoder"
-      }
      }
     ],
     "requestBody": {
@@ -1321,6 +1990,72 @@
       "application/json": {
        "schema": {
         "$ref": "#/components/schemas/UserPatch"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/tariffs/{id}": {
+   "delete": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "deleteTariff",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   },
+   "patch": {
+    "tags": [
+     "admin-controller"
+    ],
+    "operationId": "updateTariff",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/TariffReq"
        }
       }
      },
@@ -1539,6 +2274,55 @@
     }
    }
   },
+  "/portal/statements": {
+   "get": {
+    "tags": [
+     "billing-controller"
+    ],
+    "operationId": "myStatement",
+    "parameters": [
+     {
+      "name": "from",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "date-time"
+      }
+     },
+     {
+      "name": "to",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "date-time"
+      }
+     },
+     {
+      "name": "format",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "default": "json"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/portal/services": {
    "get": {
     "tags": [
@@ -1602,6 +2386,32 @@
     }
    }
   },
+  "/portal/payouts": {
+   "get": {
+    "tags": [
+     "billing-controller"
+    ],
+    "operationId": "myPayouts",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "object"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/portal/export": {
    "get": {
     "tags": [
@@ -1627,6 +2437,59 @@
         "schema": {
          "type": "string",
          "format": "byte"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/c/{token}": {
+   "get": {
+    "tags": [
+     "public-content-controller"
+    ],
+    "operationId": "open",
+    "parameters": [
+     {
+      "name": "token",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/auth/env": {
+   "get": {
+    "tags": [
+     "auth-controller"
+    ],
+    "operationId": "env",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
         }
        }
       }
@@ -1794,6 +2657,91 @@
     }
    }
   },
+  "/admin/services/{id}/campaign": {
+   "get": {
+    "tags": [
+     "engine-admin-controller"
+    ],
+    "operationId": "campaign",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     },
+     {
+      "name": "hours",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "format": "int32",
+       "default": 24
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/services/{id}/campaign/export": {
+   "get": {
+    "tags": [
+     "engine-admin-controller"
+    ],
+    "operationId": "campaignExport",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     },
+     {
+      "name": "format",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "default": "pdf"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "string",
+         "format": "byte"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/admin/reports/summary/export": {
    "get": {
     "tags": [
@@ -1865,6 +2813,24 @@
         "STATUS_MISMATCH"
        ]
       }
+     },
+     {
+      "name": "page",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "format": "int32"
+      }
+     },
+     {
+      "name": "size",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "format": "int32"
+      }
      }
     ],
     "responses": {
@@ -1933,6 +2899,26 @@
      "admin-controller"
     ],
     "operationId": "operators",
+    "parameters": [
+     {
+      "name": "page",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "format": "int32"
+      }
+     },
+     {
+      "name": "size",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "format": "int32"
+      }
+     }
+    ],
     "responses": {
      "200": {
       "description": "OK",
@@ -2024,6 +3010,24 @@
        "type": "string",
        "format": "date-time"
       }
+     },
+     {
+      "name": "page",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "format": "int32"
+      }
+     },
+     {
+      "name": "size",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "format": "int32"
+      }
      }
     ],
     "responses": {
@@ -2091,6 +3095,42 @@
         "DISPUTED"
        ]
       }
+     },
+     {
+      "name": "from",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "format": "date-time"
+      }
+     },
+     {
+      "name": "to",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "format": "date-time"
+      }
+     },
+     {
+      "name": "page",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "format": "int32"
+      }
+     },
+     {
+      "name": "size",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "format": "int32"
+      }
      }
     ],
     "responses": {
@@ -2143,6 +3183,24 @@
         "REVERSED",
         "DISPUTED"
        ]
+      }
+     },
+     {
+      "name": "from",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "format": "date-time"
+      }
+     },
+     {
+      "name": "to",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "format": "date-time"
       }
      }
     ],
@@ -2281,12 +3339,90 @@
     }
    }
   },
+  "/admin/billing/statements": {
+   "get": {
+    "tags": [
+     "billing-controller"
+    ],
+    "operationId": "statement",
+    "parameters": [
+     {
+      "name": "partnerId",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     },
+     {
+      "name": "from",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "date-time"
+      }
+     },
+     {
+      "name": "to",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "date-time"
+      }
+     },
+     {
+      "name": "format",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "default": "json"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/admin/audit": {
    "get": {
     "tags": [
      "admin-controller"
     ],
     "operationId": "audit",
+    "parameters": [
+     {
+      "name": "page",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "format": "int32"
+      }
+     },
+     {
+      "name": "size",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "format": "int32"
+      }
+     }
+    ],
     "responses": {
      "200": {
       "description": "OK",
@@ -2310,6 +3446,30 @@
      "api-controller"
     ],
     "operationId": "unsubscribe",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/admin/vote/options/{id}": {
+   "delete": {
+    "tags": [
+     "engine-admin-controller"
+    ],
+    "operationId": "deleteOption",
     "parameters": [
      {
       "name": "id",
@@ -2352,12 +3512,60 @@
     }
    }
   },
+  "/admin/quiz/questions/{id}": {
+   "delete": {
+    "tags": [
+     "engine-admin-controller"
+    ],
+    "operationId": "deleteQuestion",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
   "/admin/keywords/{id}": {
    "delete": {
     "tags": [
      "admin-controller"
     ],
     "operationId": "deleteKeyword",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/admin/content/items/{id}": {
+   "delete": {
+    "tags": [
+     "engine-admin-controller"
+    ],
+    "operationId": "deleteItem",
     "parameters": [
      {
       "name": "id",
@@ -2421,6 +3629,20 @@
      }
     }
    },
+   "LoginRequest": {
+    "type": "object",
+    "properties": {
+     "username": {
+      "type": "string"
+     },
+     "password": {
+      "type": "string"
+     },
+     "code": {
+      "type": "string"
+     }
+    }
+   },
    "SubRequest": {
     "required": [
      "consentProof",
@@ -2474,6 +3696,10 @@
      },
      "clientRef": {
       "type": "string"
+     },
+     "scheduleAt": {
+      "type": "string",
+      "format": "date-time"
      }
     }
    },
@@ -2510,6 +3736,35 @@
         "type": "object"
        }
       }
+     }
+    }
+   },
+   "LinkRequest": {
+    "required": [
+     "msisdn"
+    ],
+    "type": "object",
+    "properties": {
+     "msisdn": {
+      "type": "string"
+     },
+     "code": {
+      "type": "string"
+     }
+    }
+   },
+   "OptionReq": {
+    "type": "object",
+    "properties": {
+     "serviceId": {
+      "type": "integer",
+      "format": "int64"
+     },
+     "code": {
+      "type": "string"
+     },
+     "label": {
+      "type": "string"
      }
     }
    },
@@ -2617,6 +3872,9 @@
      },
      "status": {
       "type": "string"
+     },
+     "configApplied": {
+      "type": "boolean"
      }
     }
    },
@@ -2710,6 +3968,10 @@
      },
      "replyClosed": {
       "type": "string"
+     },
+     "maxTps": {
+      "type": "integer",
+      "format": "int32"
      }
     }
    },
@@ -2731,6 +3993,35 @@
      }
     }
    },
+   "QuestionReq": {
+    "type": "object",
+    "properties": {
+     "serviceId": {
+      "type": "integer",
+      "format": "int64"
+     },
+     "position": {
+      "type": "integer",
+      "format": "int32"
+     },
+     "question": {
+      "type": "string"
+     },
+     "answers": {
+      "type": "string"
+     },
+     "points": {
+      "type": "integer",
+      "format": "int32"
+     },
+     "replyCorrect": {
+      "type": "string"
+     },
+     "replyWrong": {
+      "type": "string"
+     }
+    }
+   },
    "PartnerReq": {
     "type": "object",
     "properties": {
@@ -2744,6 +4035,21 @@
       "type": "string"
      },
      "webhookSecret": {
+      "type": "string"
+     },
+     "maxTps": {
+      "type": "integer",
+      "format": "int32"
+     }
+    }
+   },
+   "PasswordReq": {
+    "type": "object",
+    "properties": {
+     "current": {
+      "type": "string"
+     },
+     "newPassword": {
       "type": "string"
      }
     }
@@ -2764,6 +4070,84 @@
       "format": "int64"
      },
      "word": {
+      "type": "string"
+     }
+    }
+   },
+   "ItemReq": {
+    "type": "object",
+    "properties": {
+     "serviceId": {
+      "type": "integer",
+      "format": "int64"
+     },
+     "code": {
+      "type": "string"
+     },
+     "title": {
+      "type": "string"
+     },
+     "body": {
+      "type": "string"
+     },
+     "url": {
+      "type": "string"
+     },
+     "maxUses": {
+      "type": "integer",
+      "format": "int32"
+     },
+     "ttlHours": {
+      "type": "integer",
+      "format": "int32"
+     }
+    }
+   },
+   "PeriodReq": {
+    "type": "object",
+    "properties": {
+     "from": {
+      "type": "string",
+      "format": "date-time"
+     },
+     "to": {
+      "type": "string",
+      "format": "date-time"
+     }
+    }
+   },
+   "PayoutReq": {
+    "type": "object",
+    "properties": {
+     "partnerId": {
+      "type": "integer",
+      "format": "int64"
+     },
+     "from": {
+      "type": "string",
+      "format": "date-time"
+     },
+     "to": {
+      "type": "string",
+      "format": "date-time"
+     }
+    }
+   },
+   "PayReq": {
+    "type": "object",
+    "properties": {
+     "reference": {
+      "type": "string"
+     }
+    }
+   },
+   "AdjustReq": {
+    "type": "object",
+    "properties": {
+     "eventId": {
+      "type": "string"
+     },
+     "reason": {
       "type": "string"
      }
     }
@@ -2806,9 +4190,6 @@
       "type": "string"
      }
     }
-   },
-   "PasswordEncoder": {
-    "type": "object"
    },
    "CorrectionReq": {
     "type": "object",

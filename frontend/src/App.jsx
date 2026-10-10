@@ -4,6 +4,8 @@ import { LANGS, getLang, setLang, t } from './i18n.js';
 import * as P from './pages.jsx';
 import { Portal } from './portal.jsx';
 import { Flash, ConfirmProvider } from './ui.jsx';
+import { Campaigns } from './engines.jsx';
+import { Billing } from './billing.jsx';
 
 const has = (me, ...roles) => roles.some((r) => me.roles.includes(r));
 
@@ -15,8 +17,10 @@ function menu(me) {
   if (has(me, 'SUPER_ADMIN', 'VAS_MANAGER', 'NOC', 'FINANCE', 'SUPPORT', 'AUDITOR')) m.push(['services', 'services', () => <P.Services />]);
   if (has(me, 'SUPER_ADMIN', 'VAS_MANAGER')) m.push(['partners', 'partners', () => <P.Partners />]);
   if (has(me, 'SUPER_ADMIN', 'FINANCE', 'VAS_MANAGER', 'AUDITOR')) m.push(['tariffs', 'tariffs', () => <P.Tariffs />]);
+  if (has(me, 'SUPER_ADMIN', 'VAS_MANAGER', 'NOC', 'FINANCE', 'SUPPORT', 'AUDITOR')) m.push(['campaigns', 'campaigns', () => <Campaigns />]);
   m.push(['messages', 'messages', () => <P.Messages />]);
   if (has(me, 'SUPER_ADMIN', 'FINANCE', 'AUDITOR')) m.push(['ledger', 'ledger', () => <P.Ledger />]);
+  if (has(me, 'SUPER_ADMIN', 'FINANCE', 'AUDITOR')) m.push(['billing', 'billing', () => <Billing canWrite={has(me, 'SUPER_ADMIN', 'FINANCE')} />]);
   if (has(me, 'SUPER_ADMIN', 'FINANCE', 'AUDITOR')) m.push(['reconciliation', 'reconciliation', () => <P.Reconciliation />]);
   if (has(me, 'SUPER_ADMIN', 'VAS_MANAGER', 'SUPPORT')) m.push(['rules', 'rules', () => <P.Rules />]);
   if (has(me, 'SUPER_ADMIN', 'SUPPORT', 'AUDITOR')) m.push(['support', 'support', () => <P.Support />]);
@@ -46,7 +50,7 @@ export default function App() {
       setMe(m);
       // rôles sensibles sans MFA : enrôlement obligatoire avant tout autre écran
       const sensitive = m.roles.some((r) => ['SUPER_ADMIN', 'FINANCE'].includes(r));
-      setPage(m.roles.includes('PARTNER') ? 'portal' : sensitive && !m.mfaEnabled && mfaEnforced ? 'security' : 'dashboard');
+      setPage(m.mustChangePassword ? 'security' : m.roles.includes('PARTNER') ? 'portal' : sensitive && !m.mfaEnabled && mfaEnforced ? 'security' : 'dashboard');
       setForm({ u: '', p: '', c: '' });
     } catch (ex) {
       clearCreds();
@@ -82,8 +86,16 @@ export default function App() {
     );
   }
 
+  if (me.mustChangePassword) { // mot de passe initial/réinitialisé : rien d'autre n'est accessible avant le changement
+    return (
+      <ConfirmProvider>
+        {skip}{banner}{header}
+        <main id="main"><h2>{t('changePassword')}</h2><P.ChangePassword forced onDone={() => { clearCreds(); setMe(null); setErr(t('passwordReconnect')); }} /></main>
+      </ConfirmProvider>
+    );
+  }
   const items = menu(me);
-  items.push(['security', 'security', () => <P.Security me={me} onChanged={() => { clearCreds(); setMe(null); setNeedMfa(true); setErr(t('mfaReconnect')); }} />]);
+  items.push(['security', 'security', () => <P.Security me={me} onChanged={(k) => { clearCreds(); setMe(null); setNeedMfa(true); setErr(t(k || 'mfaReconnect')); }} />]);
   const current = items.find((i) => i[0] === page) || items[0];
   return (
     <ConfirmProvider>

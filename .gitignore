@@ -12,3 +12,4 @@ docs/chiffrage/__pycache__/
 secrets/
 certs/
 .env
+dump.rdb

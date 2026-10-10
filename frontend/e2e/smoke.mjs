@@ -66,6 +66,22 @@ await page.waitForSelector('table tbody tr');
 ok((await page.locator('table tbody tr').count()) >= 4, 'recherche de messages : au moins les 4 MT de ce test');
 await page.screenshot({ path: 'e2e-admin.png' });
 
+// 3a. moteurs et campagnes : options de vote, page Campagnes (graphique + tableau équivalent), page Facturation
+await page.click('nav button:text-is("Services")');
+await page.waitForSelector('table tbody tr');
+await page.locator('table tbody tr', { hasText: 'VOTE' }).first().locator('button:has-text("Mots-clés")').click();
+await page.waitForSelector('[role=dialog]');
+ok(await page.locator('[role=dialog] h4:text-is("Options de vote")').count() === 1, 'fiche service VOTE : section « Options de vote »');
+await page.click('[role=dialog] button:text-is("Fermer")');
+await page.click('nav button:text-is("Campagnes")');
+await page.selectOption('main select >> nth=0', { index: 1 });
+await page.waitForSelector('h3:text-is("Trafic MO par heure")');
+ok(await page.locator('.stat >> text=Participants').count() > 0, 'campagne : statistiques affichées');
+ok(await page.locator('details summary:text-is("Afficher le tableau")').count() === 1 || await page.locator('h3:text-is("Trafic MO par heure") ~ p.muted').count() === 1, 'campagne : trafic horaire avec équivalent tableau (ou vide)');
+await page.click('nav button:text-is("Facturation")');
+await page.waitForSelector('text=Périodes clôturées');
+ok(await page.locator('.err').count() === 0, 'facturation : écran chargé sans erreur');
+
 // 3b. modales, validation et confirmations : édition d'un opérateur
 await page.click('nav button:text-is("Opérateurs")');
 await page.waitForSelector('table tbody tr');
@@ -97,6 +113,15 @@ const p2 = await ctx.newPage();
 p2.on('pageerror', (e) => jsErrors.push(String(e)));
 await p2.goto(BASE + '/');
 await login(p2, 'club2', 'Club-pass-12345');
+// compte créé par un administrateur : écran de changement de mot de passe imposé, aucun autre écran accessible
+await p2.waitForSelector('text=doit être changé');
+ok((await p2.locator('nav button').count()) === 0, 'mot de passe imposé : aucun menu tant qu\'il n\'est pas changé');
+await p2.fill('input[autocomplete=current-password]', 'Club-pass-12345');
+await p2.locator('input[autocomplete=new-password]').nth(0).fill('Club-nouveau-2026');
+await p2.locator('input[autocomplete=new-password]').nth(1).fill('Club-nouveau-2026');
+await p2.click('button:text-is("Enregistrer")');
+await p2.waitForSelector('text=reconnectez-vous');
+await login(p2, 'club2', 'Club-nouveau-2026');
 await p2.waitForSelector('h2:text("Club Sportif")');
 ok((await p2.locator('nav button').count()) === 2, 'partenaire : menu limité (portail + sécurité)');
 await p2.click('button:text("Résultats")');

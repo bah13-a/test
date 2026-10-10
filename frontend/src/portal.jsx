@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { api, download } from './api.js';
 import { t } from './i18n.js';
 import { useLoad, Flash, Table, Card, Stat } from './ui.jsx';
+import { PortalBilling } from './billing.jsx';
 
 const pct = (x) => `${(100 * (x || 0)).toFixed(1)} %`;
 
@@ -35,6 +36,7 @@ export function Portal() {
               {svc === s.serviceId && <Table caption={t('results')} cols={['content', 'count']} rows={(res.data || []).map((r, i) => ({ id: i, ...r }))} />}
             </Card>
           ))}
+          <PortalBilling />
           <Card title={t('ledger')}><Table caption={t('ledger')} cols={['status', 'grossAmount', 'partnerShare', 'events']} rows={Object.entries(data.billingByStatus).map(([k, v]) => ({ id: k, status: k, ...v }))} /></Card>
         </>
       )}

@@ -62,8 +62,10 @@ public class JasminHttpGateway implements SmsGateway {
             log.warn("Jasmin refus cid={} : {}", mt.getCorrelationId(), body);
             return SendResult.fail(String.valueOf(body), false);
         } catch (RestClientResponseException e) {
-            // 4xx = rejet définitif, 5xx / 503 throttling = retry
-            boolean retry = e.getStatusCode().is5xxServerError() || e.getStatusCode().value() == 429;
+            // 412 = « aucune route / aucun connecteur lié » (liaisons SMPP toutes coupées avec une route de bascule) : transitoire, on réessaie
+            // (constaté sur Jasmin 0.10.13 réel). 5xx et 429 : retry. Autres 4xx (403 authentification, 400 paramètres) : rejet définitif.
+            int code = e.getStatusCode().value();
+            boolean retry = e.getStatusCode().is5xxServerError() || code == 429 || code == 412;
             return SendResult.fail("HTTP " + e.getStatusCode().value() + " " + e.getResponseBodyAsString(), retry);
         } catch (Exception e) {
             return SendResult.fail(e.getClass().getSimpleName() + ": " + e.getMessage(), true);

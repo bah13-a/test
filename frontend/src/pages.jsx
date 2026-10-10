@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { api, download, qs } from './api.js';
 import { t } from './i18n.js';
 import { useLoad, usePaged, Pager, Flash, Table, Form, Card, Stat, Modal, useConfirm, rules } from './ui.jsx';
+import { ServiceEngine } from './engines.jsx';
 
 /** Hook d'action : exécute, affiche succès/erreur, recharge ; `busy` désactive les boutons pendant l'appel. */
-function useAction(reload) {
+export function useAction(reload) {
   const [msg, setMsg] = useState({});
   const [busy, setBusy] = useState(false);
   const run = async (fn, done) => {
@@ -14,10 +15,10 @@ function useAction(reload) {
   return [msg, run, busy];
 }
 
-const pct = (x) => `${(100 * (x || 0)).toFixed(1)} %`;
-const iso = (v) => (v ? new Date(v).toISOString() : undefined);
-const exportButtons = (run, mk, name) => ['csv', 'xlsx', 'pdf'].map((f) => <button key={f} type="button" className="btn sm" onClick={() => run(() => download(mk(f), `${name}.${f}`))}>{t('export')} {f.toUpperCase()}</button>);
-const Btn = ({ children, ...p }) => <button type="button" className="btn sm" {...p}>{children}</button>;
+export const pct = (x) => `${(100 * (x || 0)).toFixed(1)} %`;
+export const iso = (v) => (v ? new Date(v).toISOString() : undefined);
+export const exportButtons = (run, mk, name) => ['csv', 'xlsx', 'pdf'].map((f) => <button key={f} type="button" className="btn sm" onClick={() => run(() => download(mk(f), `${name}.${f}`))}>{t('export')} {f.toUpperCase()}</button>);
+export const Btn = ({ children, ...p }) => <button type="button" className="btn sm" {...p}>{children}</button>;
 
 export function Dashboard() {
   const [hours, setHours] = useState(24);
@@ -103,11 +104,11 @@ export function Partners() {
   const [msg, run, busy] = useAction(pg.reload);
   return (
     <>
-      <Card title={t('partners')}><Flash error={error} {...msg} /><Table caption={t('partners')} cols={['id', 'name', 'sharePercent', 'webhookUrl']} rows={rows} /><Pager total={total} {...pg} /></Card>
+      <Card title={t('partners')}><Flash error={error} {...msg} /><Table caption={t('partners')} cols={['id', 'name', 'sharePercent', 'maxTps', 'webhookUrl']} rows={rows} /><Pager total={total} {...pg} /></Card>
       <Card title={t('create')}>
-        <Form busy={busy} fields={[{ name: 'name', label: t('name'), required: true }, { name: 'sharePercent', label: '% partenaire', type: 'number', step: '0.01', validate: rules.percent },
+        <Form busy={busy} fields={[{ name: 'name', label: t('name'), required: true }, { name: 'sharePercent', label: '% partenaire', type: 'number', step: '0.01', validate: rules.percent }, { name: 'maxTps', label: t('tps'), type: 'number', min: 0 },
           { name: 'webhookUrl', label: 'Webhook URL (https)', validate: (v) => (/^https?:\/\/[^\s]+$/.test(v) ? null : t('invalidValue')) }, { name: 'webhookSecret', label: 'Webhook secret', type: 'password', validate: rules.minLength(16) }]}
-          onSubmit={(v, done) => run(() => api('/admin/partners', { method: 'POST', body: { ...v, sharePercent: v.sharePercent ? +v.sharePercent : 0 } }), done)} />
+          onSubmit={(v, done) => run(() => api('/admin/partners', { method: 'POST', body: { ...v, sharePercent: v.sharePercent ? +v.sharePercent : 0, maxTps: v.maxTps ? +v.maxTps : 0 } }), done)} />
       </Card>
     </>
   );
@@ -120,11 +121,11 @@ const serviceFields = (sc, pa, creating) => [
   { name: 'partnerId', label: t('partners'), options: (pa || []).map((p) => ({ value: p.id, label: p.name })) },
   { name: 'consentMode', label: 'Consentement', options: ['SIMPLE_OPT_IN', 'DOUBLE_OPT_IN', 'API_ACTIVATION'] },
   { name: 'defaultLang', label: t('language'), options: ['fr', 'ar', 'en'] },
-  { name: 'maxActionsPerMsisdn', label: 'Max actions / MSISDN', type: 'number', min: 0 },
+  { name: 'maxActionsPerMsisdn', label: 'Max actions / MSISDN', type: 'number', min: 0 }, { name: 'maxTps', label: t('tps'), type: 'number', min: 0 },
   { name: 'opensAt', label: 'Ouverture', type: 'datetime-local' }, { name: 'closesAt', label: 'Fermeture', type: 'datetime-local' },
   creating && { name: 'regulated', label: 'Réglementé', type: 'checkbox' },
 ].filter(Boolean);
-const serviceBody = (v) => ({ ...v, shortCodeId: v.shortCodeId ? +v.shortCodeId : undefined, partnerId: v.partnerId ? +v.partnerId : undefined, maxActionsPerMsisdn: v.maxActionsPerMsisdn !== '' && v.maxActionsPerMsisdn != null ? +v.maxActionsPerMsisdn : undefined, opensAt: iso(v.opensAt), closesAt: iso(v.closesAt) });
+const serviceBody = (v) => ({ ...v, shortCodeId: v.shortCodeId ? +v.shortCodeId : undefined, partnerId: v.partnerId ? +v.partnerId : undefined, maxActionsPerMsisdn: v.maxActionsPerMsisdn !== '' && v.maxActionsPerMsisdn != null ? +v.maxActionsPerMsisdn : undefined, maxTps: v.maxTps !== '' && v.maxTps != null ? +v.maxTps : undefined, opensAt: iso(v.opensAt), closesAt: iso(v.closesAt) });
 const local = (iso) => (iso ? new Date(iso).toISOString().slice(0, 16) : '');
 
 export function Services() {
@@ -141,7 +142,7 @@ export function Services() {
     <>
       <Card title={t('services')}>
         <Flash error={error} {...msg} />
-        <Table caption={t('services')} cols={['id', 'name', 'type', 'status', 'shortCode', 'operator', 'partner', 'regulated', 'regulatoryApproved', 'actions']} labels={{ actions: t('actions') }} rows={rows} render={{
+        <Table caption={t('services')} cols={['id', 'name', 'type', 'status', 'shortCode', 'operator', 'partner', 'maxTps', 'regulated', 'regulatoryApproved', 'actions']} labels={{ actions: t('actions') }} rows={rows} render={{
           actions: (s) => (
             <>
               {s.status !== 'ACTIVE' && <Btn disabled={busy} onClick={() => st(s, 'ACTIVE')}>{t('activate')}</Btn>}{' '}
@@ -155,7 +156,7 @@ export function Services() {
       {edit && (
         <Modal title={`${t('edit')} — ${edit.name}`} onClose={() => setEdit(null)}>
           <Form submit={t('save')} busy={busy} onCancel={() => setEdit(null)} fields={serviceFields(sc.data, pa.data, false)}
-            initial={{ name: edit.name, consentMode: edit.consentMode, defaultLang: edit.defaultLang, maxActionsPerMsisdn: edit.maxActionsPerMsisdn, opensAt: local(edit.opensAt), closesAt: local(edit.closesAt) }}
+            initial={{ name: edit.name, consentMode: edit.consentMode, defaultLang: edit.defaultLang, maxActionsPerMsisdn: edit.maxActionsPerMsisdn, maxTps: edit.maxTps, opensAt: local(edit.opensAt), closesAt: local(edit.closesAt) }}
             onSubmit={(v) => run(() => api('/admin/services/' + edit.id, { method: 'PATCH', body: serviceBody(v) }), () => setEdit(null))} />
         </Modal>)}
       {sel && <ServiceDetail service={sel} onClose={() => setSel(null)} />}
@@ -184,6 +185,7 @@ function ServiceDetail({ service, onClose }) {
         { name: 'kind', label: 'Type', required: true, options: ['OK', 'STOP', 'HELP', 'LIMIT', 'CLOSED', 'CONFIRM', 'ALREADY', 'SUB_OK', 'RENEWAL'] },
         { name: 'text', label: t('comment'), required: true }]}
         onSubmit={(v, done) => run(() => api('/admin/replies', { method: 'PUT', body: { serviceId: service.id, ...v } }), () => { done(); reloadRp(); })} />
+      <ServiceEngine service={service} />
       <div className="actions"><button type="button" className="btn ghost" onClick={onClose}>{t('close')}</button></div>
     </Modal>
   );
@@ -437,10 +439,29 @@ export function Audit() {
   return <Card title={t('audit')}><Flash error={error} /><Table caption={t('audit')} cols={['at', 'actor', 'action', 'target', 'detail']} rows={rows} /><Pager total={total} {...pg} /></Card>;
 }
 
+/** Changement de son propre mot de passe : toutes les sessions sont ensuite révoquées (reconnexion). */
+export function ChangePassword({ onDone, forced }) {
+  const [msg, run, busy] = useAction();
+  const strong = (v) => (v.length >= 12 && /\d/.test(v) && /[A-Za-z]/.test(v) ? null : t('minLength').replace('{n}', 12));
+  return (
+    <Card title={t('changePassword')}>
+      {forced && <p role="alert">{t('mustChange')}</p>}
+      <Form submit={t('save')} busy={busy} fields={[
+        { name: 'current', label: t('currentPassword'), type: 'password', required: true, autoComplete: 'current-password' },
+        { name: 'newPassword', label: t('newPassword'), type: 'password', required: true, autoComplete: 'new-password', validate: strong },
+        { name: 'confirm', label: t('confirmPassword'), type: 'password', required: true, autoComplete: 'new-password' }]}
+        onSubmit={(v) => (v.newPassword !== v.confirm ? run(async () => { throw new Error(t('passwordMismatch')); }) : run(async () => { await api('/admin/me/password', { method: 'POST', body: { current: v.current, newPassword: v.newPassword } }); onDone(); }))} />
+      <Flash {...msg} />
+    </Card>
+  );
+}
+
 export function Security({ me, onChanged }) {
   const [setup, setSetup] = useState(null);
   const [msg, run, busy] = useAction();
+  const confirm = useConfirm();
   return (
+    <>
     <Card title={t('security')}>
       <p>{me.mfaEnabled ? `✓ ${t('mfaEnabled')}` : '✗ MFA'}</p>
       {!me.mfaEnabled && !setup && <button type="button" className="btn" disabled={busy} onClick={() => run(async () => setSetup(await api('/admin/me/mfa/setup', { method: 'POST' })))}>{t('mfaSetup')}</button>}
@@ -451,5 +472,10 @@ export function Security({ me, onChanged }) {
       </>}
       <Flash {...msg} />
     </Card>
+    <ChangePassword onDone={() => onChanged('passwordReconnect')} />
+    <Card title={t('sessions')}>
+      <button type="button" className="btn" disabled={busy} onClick={async () => { if (await confirm(t('confirmLogoutAll'), { danger: true })) run(async () => { await api('/admin/me/logout-all', { method: 'POST' }); onChanged('sessionsRevoked'); }); }}>{t('logoutAll')}</button>
+    </Card>
+    </>
   );
 }

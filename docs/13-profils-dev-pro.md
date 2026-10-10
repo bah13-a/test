@@ -19,7 +19,7 @@ L'application **refuse de démarrer sans profil explicite** (`ProfileGuard`) et 
 | Conservation (purge) | désactivée | `RETENTION_*_DAYS` |
 
 ## Ce que `pro` contrôle au démarrage (`ProductionGuard`)
-Échec si : simulateur actif · `JASMIN_URL` invalide · `JASMIN_PASSWORD` < 12 car. ou valeur d'exemple · `CALLBACK_SECRET` < 24 · `TOKEN_SECRET` < 32 · file ≠ `rabbit` · quotas ≠ `redis` · MFA non imposé · `VAS_PUBLIC_BASE_URL` absent ou `localhost` · base ≠ PostgreSQL · hash admin `{noop}` ou absent · mocks (`vas.mock.*`) actifs.
+Échec si : simulateur actif · `JASMIN_URL` invalide · `JASMIN_PASSWORD` < 12 car. ou valeur d'exemple · `CALLBACK_SECRET` < 24 · `TOKEN_SECRET` < 32 · `DATA_KEY` < 32 ou valeur d'exemple · file ≠ `rabbit` · quotas ≠ `redis` · MFA non imposé · `VAS_PUBLIC_BASE_URL` absent ou `localhost` · base ≠ PostgreSQL · hash admin `{noop}` ou absent · mocks (`vas.mock.*`) actifs.
 Avertissements (journalisés) : préfixes MSISDN vides, short code absent, aucune durée de conservation.
 
 ## Détails externes à fournir pour `pro` (checklist de mise en service)
@@ -44,7 +44,7 @@ Tout se renseigne dans `.env` (modèle : `.env.pro.example`, chaque variable est
 | 14 | Nom DNS public + certificat TLS | hébergeur / client | `PUBLIC_HOSTNAME`, `certs/fullchain.pem`, `certs/privkey.pem` |
 | 15 | Destinataires des alertes (e-mail, Teams/Slack), serveur SMTP | exploitation | `ALERT_*` |
 | 16 | Clé publique GPG pour les sauvegardes, destination hors site | client | `BACKUP_GPG_RECIPIENT`, `OFFSITE_TARGET` |
-| 17 | Mots de passe : PostgreSQL, RabbitMQ, Redis, Jasmin, jcli, Grafana ; secrets applicatifs | générés par le client (`openssl rand -base64 36`) | `DB_PASSWORD`, `RABBIT_PASSWORD`, `REDIS_PASSWORD`, `JASMIN_PASSWORD`, `JCLI_PASSWORD`, `GRAFANA_PASSWORD`, `TOKEN_SECRET`, `CALLBACK_SECRET` |
+| 17 | Mots de passe : PostgreSQL, RabbitMQ, Redis, Jasmin, jcli, Grafana ; secrets applicatifs | générés par le client (`openssl rand -base64 36`) | `DB_PASSWORD`, `RABBIT_PASSWORD`, `REDIS_PASSWORD`, `JASMIN_PASSWORD`, `JCLI_PASSWORD`, `GRAFANA_PASSWORD`, `TOKEN_SECRET`, `CALLBACK_SECRET`, **`DATA_KEY`** (chiffrement des numéros : à sauvegarder hors serveur, voir 16) |
 
 ## Procédure de mise en service `pro`
 

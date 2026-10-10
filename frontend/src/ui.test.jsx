@@ -93,3 +93,28 @@ describe('Table et Pager', () => {
     expect(setSize).toHaveBeenCalledWith(100);
   });
 });
+
+describe('Campagnes et changement de mot de passe', () => {
+  it('l histogramme horaire a un équivalent tableau accessible', async () => {
+    const { HourlyBars } = await import('./engines.jsx');
+    render(<HourlyBars series={[{ hour: '2026-10-10T10:00:00Z', mo: 10, participants: 7 }, { hour: '2026-10-10T11:00:00Z', mo: 40, participants: 30 }]} />);
+    expect(screen.getByRole('img', { name: 'Trafic MO par heure' })).toBeInTheDocument();
+    expect(screen.getByText('Afficher le tableau')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Trafic MO par heure' })).toBeInTheDocument();
+  });
+
+  it('refuse deux mots de passe différents sans appeler le serveur', async () => {
+    const { ChangePassword } = await import('./pages.jsx');
+    const spy = vi.spyOn(globalThis, 'fetch');
+    const onDone = vi.fn();
+    render(<ChangePassword forced onDone={onDone} />);
+    await userEvent.type(screen.getByLabelText(/Mot de passe actuel/), 'Ancien-mdp-2026');
+    await userEvent.type(screen.getByLabelText(/Nouveau mot de passe/), 'Nouveau-mdp-2026');
+    await userEvent.type(screen.getByLabelText(/Confirmer le mot de passe/), 'Autre-mdp-2026-x');
+    await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    expect(await screen.findByText('Les mots de passe ne correspondent pas')).toBeInTheDocument();
+    expect(onDone).not.toHaveBeenCalled();
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+});

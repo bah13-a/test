@@ -47,7 +47,7 @@ jobs:
         run: |
           HASH=$(java -Dloader.main=tn.vas.tools.HashPassword -cp target/vas-platform-1.0.0.jar org.springframework.boot.loader.launch.PropertiesLauncher 'Admin-Real-Pass-42')
           SPRING_PROFILES_ACTIVE=pro DB_URL=jdbc:postgresql://localhost:5433/vas DB_USER=vas DB_PASSWORD=Zx9-db-real-password RABBIT_HOST=localhost RABBIT_USER=guest RABBIT_PASSWORD=guest \
-          REDIS_HOST=localhost REDIS_PORT=6380 VAS_PUBLIC_BASE_URL=http://host.vasapp.local:18090 TOKEN_SECRET=Zx9-token-secret-very-long-random-0123456789 JASMIN_URL=http://127.0.0.1:1401 \
+          REDIS_HOST=localhost REDIS_PORT=6380 VAS_PUBLIC_BASE_URL=http://host.vasapp.local:18090 DATA_KEY=Zx9-data-key-integration-0123456789abcdefghijklmnop TOKEN_SECRET=Zx9-token-secret-very-long-random-0123456789 JASMIN_URL=http://127.0.0.1:1401 \
           JASMIN_PASSWORD=Zx9jasminpass01 CALLBACK_SECRET=Zx9-callback-secret-very-long-0123 ADMIN_PASSWORD_HASH="$HASH" TT_MSISDN_PREFIXES="9,4" TT_SHORT_CODES="85500" \
           nohup java -jar target/vas-platform-1.0.0.jar --server.port=18090 > app.log 2>&1 &
           for i in $(seq 1 40); do curl -sf localhost:18090/auth/env && break; sleep 3; done

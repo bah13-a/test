@@ -6,22 +6,25 @@ Environnement d'exécution : conteneur de développement (JDK 21, PostgreSQL 16,
 
 | Suite | Tests | Résultat | Contenu |
 |---|---|---|---|
+| `LifecycleTests` | 12 | OK | points 10 à 15 : renouvellement (reprise J+1, suspension après 3 échecs, remise à zéro), espacement du limiteur, TPS service/partenaire, envoi programmé, **facturation** (ajustements, clôture, période figée, relevés, reversements 4 yeux, isolation portail), OAuth2, anti-SSRF, mot de passe imposé + révocation des sessions, chiffrement des numéros |
+| `JasminHttpGatewayTests` | 3 | OK | classification des réponses Jasmin (412/429/5xx réessayés, 403/400 définitifs) |
+| `RetentionPostgresTests` | 1 | OK sur PG réel (ignoré sans `PG_TEST_URL`) | purge du journal d'audit à travers le trigger immuable |
 | `UnitTests` | 8 | OK | normalisation MSISDN, GSM-7/UCS-2 et segments, mapping DLR, répartition des revenus (somme exacte), signature webhook, **TOTP RFC 6238 (vecteur officiel)**, détection de langue, parsing CSV avec mapping |
 | `SmppSimulatorTests` | 5 | OK | vrai client SMPP v3.4 (jsmpp) ↔ simulateur SMSC : bind, mauvais mot de passe rejeté, submit_sm + DLR (`DELIVRD`/`UNDELIV`), injection MO, `ESME_RTHROTTLED`, coupure de lien + reconnexion |
 | `ProfileTests` | 6 | OK | `ProductionGuard` (accepte une bonne config, rejette mocks/secrets faibles/base H2/hash `{noop}`/hash admin absent), avertissements, `OperatorSync` (création, première synchro, back-office prioritaire ensuite, `overwrite`), purge de conservation (MT finaux seulement) |
 | `ProfileGuardTests` + `ProfileGuardVerifyTests` | 3 | OK | refus de démarrer sans profil, refus `dev`+`pro` |
 | `DevProfileTests` | 6 | OK | profil `dev` complet : données de démonstration, DLR automatiques → ledger `CHARGED`, un compte par rôle avec ses droits, clé API de démo, puits de webhook (signature + anti-rejeu), faux relevé opérateur |
-| `FlowTests` | 19 | OK | MO→MT→DLR→facturation, rejeu MO/DLR idempotent, mot-clé inconnu, STOP (et arabe), double opt-in, service réglementé bloqué, lien coupé + balayeur, MO arabe/UCS-2, listes noire/blanche, MFA (enrôlement, jeton, verrouillage), portail partenaire isolé + audit, rapprochement XLSX/CSV + exports PDF/XLSX/CSV, webhooks MO/DLR signés, scopes API, RBAC, approbation 4-yeux |
-| Front (`vitest`) | 3 | OK | complétude des traductions FR/AR/EN, bascule de langue |
+| `FlowTests` | 25 | OK | MO→MT→DLR→facturation, rejeu MO/DLR idempotent, mot-clé inconnu, STOP (et arabe), double opt-in, service réglementé bloqué, lien coupé + balayeur, MO arabe/UCS-2, listes noire/blanche, MFA (enrôlement, jeton, verrouillage), portail partenaire isolé + audit, rapprochement XLSX/CSV + exports PDF/XLSX/CSV, webhooks MO/DLR signés, scopes API, RBAC, approbation 4-yeux |
+| Front (`vitest`) | 13 | OK | complétude des traductions FR/AR/EN, validation accessible des formulaires, modales, tableaux, pagination, histogramme avec tableau équivalent, changement de mot de passe |
 
-Total : **50 tests (47 Java + 3 front), 0 échec**.
+Total : **89 tests (76 Java dont 1 exécuté à part sur PostgreSQL réel + 13 front), 0 échec**.
 
 ## 2. Parcours navigateur (Chromium, `frontend/e2e/smoke.mjs`) sur PostgreSQL + Redis réels
 
-26 vérifications OK : rôle sensible redirigé vers l'enrôlement MFA, activation TOTP, reconnexion avec code, 4 MO simulés (dont arabe), navigation dans les 14 écrans administrateur sans erreur, recherche de messages, compte partenaire limité au portail (résultats par contenu), bascule arabe en RTL, aucune exception JavaScript.
+34 vérifications OK : rôle sensible redirigé vers l'enrôlement MFA, activation TOTP, reconnexion avec code, 4 MO simulés (dont arabe), navigation dans les 17 écrans administrateur (dont Campagnes et Facturation) sans erreur, fiche service avec « Options de vote », mot de passe imposé au compte partenaire, recherche de messages, compte partenaire limité au portail (résultats par contenu), bascule arabe en RTL, aucune exception JavaScript.
 
 ## 3. Migrations et schéma
-Flyway V1-V6 appliquées sur PostgreSQL 16 réel avec `ddl-auto=validate` (mapping JPA conforme au schéma).
+Flyway V1-V10 appliquées sur PostgreSQL 16 réel avec `ddl-auto=validate` (mapping JPA conforme au schéma).
 
 ## 4. Test de charge (`tests/load/load.mjs`, 1 instance, PostgreSQL + Redis réels, 50 connexions)
 
@@ -51,3 +54,8 @@ Bandeau « environnement de démonstration », connexion avec un compte de démo
 - **Pile réelle** (PostgreSQL 16, Redis, RabbitMQ 3.12, Jasmin 0.10.13, simulateur SMSC) : `tests/integration/full-stack.mjs`, 21 vérifications, 0 échec - voir `14-tests-integration.md` (10 défauts trouvés et corrigés).
 - **Base de données** : mesures sur 2 M de lignes, avant/après index - voir `15-performance-base.md`.
 - **Repli Redis** : `RateLimiterTests` (Redis injoignable : service maintenu, quota local, pas d'attente).
+
+## 10. Lot « points 6 à 15 » (moteurs, facturation, API, comptes)
+- **Pile réelle** : `tests/integration/full-stack.mjs` passe à **33 vérifications, 0 échec** (OAuth2, anti-SSRF, MT programmé, facturation, mot de passe imposé, en plus du scénario MO/MT/DLR) ; `pg-audit.sh` 5/5 ; `failover.sh` 7/7 sur Jasmin 0.10.13 réel – voir `14-tests-integration.md` (13 défauts trouvés et corrigés au total).
+- **Navigateur** : `smoke.mjs` – 34 vérifications OK ; `a11y.mjs` – **38 vues (fr + ar, modales ouvertes), 884 contrôles axe, 0 violation WCAG 2.1 A/AA**.
+- Description fonctionnelle : `16-moteurs-facturation-comptes.md`.

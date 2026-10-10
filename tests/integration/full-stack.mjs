@@ -30,6 +30,7 @@ async function enroll(u, p) {
   await a('/admin/me/mfa/confirm', 'POST', { code: totp(secret) });
   return { secret, token: async () => login(u, p, totp(secret)) };
 }
+const status = (tok) => async (path, method = 'GET', body) => (await fetch(BASE + path, { method, headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' }, body: body && JSON.stringify(body) })).status;
 const simMessages = async () => (await (await fetch(SIM + '/messages')).json());
 
 // ---------- préparation ----------
@@ -37,7 +38,15 @@ const admin = await enroll(ADMIN, PW);
 const A = api(await admin.token());
 ok((await A('/admin/me')).mfaEnabled === true, 'SUPER_ADMIN avec MFA actif');
 for (const u of ['finance1', 'finance2']) await A('/admin/users', 'POST', { username: u, password: 'Finance-pass-12345', roles: ['FINANCE'] });
-const f1 = await enroll('finance1', 'Finance-pass-12345'), f2 = await enroll('finance2', 'Finance-pass-12345');
+// compte créé par un administrateur : mot de passe à changer avant tout autre accès (puis anciennes sessions révoquées)
+const FP = 'Finance-pass-67890';
+{
+  const t0 = await login('finance1', 'Finance-pass-12345');
+  ok((await fetch(BASE + '/admin/operators', { headers: { Authorization: 'Bearer ' + t0 } })).status === 403, 'compte neuf : accès refusé tant que le mot de passe n\'est pas changé');
+  for (const u of ['finance1', 'finance2']) { const t = await login(u, 'Finance-pass-12345'); await api(t)('/admin/me/password', 'POST', { current: 'Finance-pass-12345', newPassword: FP }); }
+  ok((await fetch(BASE + '/admin/me', { headers: { Authorization: 'Bearer ' + t0 } })).status === 401, 'ancienne session révoquée après changement de mot de passe');
+}
+const f1 = await enroll('finance1', FP), f2 = await enroll('finance2', FP);
 const sc = (await A('/admin/shortcodes')).find((s) => s.number === SHORT);
 ok(!!sc, `short code ${SHORT} synchronisé depuis la configuration`);
 const partner = await A('/admin/partners', 'POST', { name: 'Club IT', sharePercent: 30 });
@@ -82,7 +91,7 @@ const parts = (await until(async () => { const p = (await simMessages()).filter(
 ok(parts.length === res.segments, `SMSC : ${parts.length} submit_sm reçus pour ${res.segments} segments`);
 ok(parts.some((p) => p.udh), 'concaténation UDH présente');
 const longMt = await until(async () => (await messages('+21698111222')).find((x) => x.status === 'DELIVERED' || x.status === 'UNKNOWN'), 20000);
-console.log(`
+ok(!!longMt, 'message long : statut final reçu (DLR par segment agrégé)');
 
 // ---------- 4. coupure du lien SMPP ----------
 await fetch(SIM + '/reset');
@@ -116,6 +125,36 @@ st = await (await fetch(SIM + '/stats')).json();
 ok(st.throttled > 0, `le SMSC a bien limité le débit (${st.throttled} rejets absorbés)`);
 ok((await A('/admin/messages?status=FAILED')).length === 0, 'aucun MT en échec définitif');
 await fetch(SIM + '/tps?v=0');
+
+// ---------- 6. OAuth2, webhooks, envoi programmé, facturation (points 12 à 14) ----------
+{
+  const form = new URLSearchParams({ grant_type: 'client_credentials', client_id: 'client-' + client.id, client_secret: client.apiKey });
+  const tok = await (await fetch(BASE + '/oauth/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form })).json();
+  ok(tok.token_type === 'Bearer' && !!tok.access_token, 'OAuth2 client_credentials : jeton Bearer émis');
+  const apiSt = (await fetch(BASE + '/api/v1/services', { headers: { Authorization: 'Bearer ' + tok.access_token } })).status;
+  ok(apiSt === 403 || apiSt === 200, `jeton OAuth2 accepté par l'API (statut ${apiSt} ; 403 = scope absent, jamais 401)`);
+  ok((await fetch(BASE + '/oauth/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'client_credentials', client_id: 'client-' + client.id, client_secret: 'faux' }) })).status === 401, 'OAuth2 : mauvais secret refusé');
+  const S = status(await admin.token());
+  ok((await S('/admin/partners/' + partner.id, 'PATCH', { webhookUrl: 'http://example.com/hook' })) === 422, 'webhook en http refusé en production (422, https obligatoire)');
+  ok((await S('/admin/partners/' + partner.id, 'PATCH', { webhookUrl: 'https://169.254.169.254/latest/meta-data' })) === 422, 'webhook vers adresse metadata/privée refusé (422, SSRF)');
+
+  const at = new Date(Date.now() + 3600e3).toISOString();
+  const sch = await (await fetch(BASE + '/api/v1/messages', { method: 'POST', headers: K, body: JSON.stringify({ to: '98777666', text: 'programmé', serviceId: svc.id, clientRef: 'sched-1', scheduleAt: at }) })).json();
+  await sleep(4000);
+  const schMt = (await A('/admin/messages?msisdn=98777666'))[0];
+  ok(schMt && schMt.status === 'PENDING', 'MT programmé à +1 h : non envoyé (PENDING)');
+
+  const from = new Date(Date.now() - 86400e3).toISOString(), to = new Date(Date.now() + 1000).toISOString();
+  const F1 = api(await f1.token()), F2 = api(await f2.token());
+  ok((await status(await f1.token())('/admin/billing/periods', 'POST', { from, to: new Date(Date.now() - 1000).toISOString() })) === 409, 'clôture refusée (409) tant que des événements ne sont pas rapprochés');
+  const evs = (await F1('/admin/ledger?status=CHARGED&size=5')) || [];
+  if (evs.length) {
+    const rev = await F1('/admin/billing/adjustments', 'POST', { eventId: evs[0].eventId, reason: 'test intégration' });
+    ok(rev.mode === 'REVERSED', 'remboursement en période ouverte : événement REVERSED');
+  }
+  const stmt = await F1(`/admin/billing/statements?partnerId=${partner.id}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+  ok(Array.isArray(stmt) && stmt.some((r) => r.service === 'TOTAL'), 'relevé partenaire (JSON) avec total');
+}
 
 console.log(failed === 0 ? '\nINTÉGRATION COMPLÈTE : TOUT EST OK' : `\n${failed} ÉCHEC(S)`);
 process.exit(failed === 0 ? 0 : 1);

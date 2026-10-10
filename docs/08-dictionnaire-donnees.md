@@ -1,7 +1,8 @@
 # Dictionnaire de données
 
-Généré depuis le schéma PostgreSQL réel après application des migrations Flyway V1–V5 (`src/main/resources/db/migration`).
-Montants : `DECIMAL(12,3)` (millimes de dinar). Horodatages : `TIMESTAMP WITH TIME ZONE` (UTC).
+Généré depuis le schéma PostgreSQL réel après application des migrations Flyway V1–V10 (`src/main/resources/db/migration` et `db/vendor/postgresql`) par `tools/gen_dictionary.py`.
+Montants : `DECIMAL(12,3)` (millimes de dinar) ; totaux de période et reversements : `DECIMAL(14,3)`. Horodatages : `TIMESTAMP WITH TIME ZONE` (UTC).
+Les numéros de téléphone (`msisdn`) sont stockés **chiffrés** (`enc:v1:…`, AES-256 déterministe, clé `vas.data-key`) : colonnes `VARCHAR(100)`.
 
 
 ## `api_client`
@@ -34,6 +35,8 @@ Comptes back-office : hash bcrypt, rôles, TOTP, verrouillage.
 | `active` | boolean | non | true |
 | `failed_logins` | integer | non | 0 |
 | `locked_until` | timestamp with time zone | oui |  |
+| `must_change_password` | boolean | non | false |
+| `token_version` | integer | non | 0 |
 
 ## `audit_log`
 
@@ -48,6 +51,24 @@ Journal d'audit applicatif (aucune interface de modification).
 | `detail` | character varying(1000) | oui |  |
 | `at` | timestamp with time zone | non |  |
 
+## `billing_period`
+
+Périodes de facturation clôturées (totaux figés ; plus aucune transition de ledger dans ces dates).
+
+| Colonne | Type | Null | Défaut / référence |
+|---|---|---|---|
+| `id` | bigint | non |  |
+| `from_at` | timestamp with time zone | non |  |
+| `to_at` | timestamp with time zone | non |  |
+| `closed_at` | timestamp with time zone | non |  |
+| `closed_by` | character varying(80) | non |  |
+| `events` | integer | non |  |
+| `gross` | numeric | non |  |
+| `operator_share` | numeric | non |  |
+| `partner_share` | numeric | non |  |
+| `provider_share` | numeric | non |  |
+| `taxes` | numeric | non |  |
+
 ## `consent_record`
 
 Preuves de consentement historisées (source, canal, texte, version des conditions).
@@ -55,13 +76,42 @@ Preuves de consentement historisées (source, canal, texte, version des conditio
 | Colonne | Type | Null | Défaut / référence |
 |---|---|---|---|
 | `id` | bigint | non |  |
-| `msisdn` | character varying(20) | non |  |
+| `msisdn` | character varying(100) | non |  |
 | `service_id` | bigint | non | → `vas_service` |
 | `action` | character varying(20) | non |  |
 | `channel` | character varying(20) | non |  |
 | `proof_text` | character varying(1000) | oui |  |
 | `terms_version` | character varying(20) | oui |  |
 | `at` | timestamp with time zone | non |  |
+
+## `content_item`
+
+Contenus premium diffusables par lien (code, titre, texte/URL, nombre d'usages et durée du lien).
+
+| Colonne | Type | Null | Défaut / référence |
+|---|---|---|---|
+| `id` | bigint | non |  |
+| `service_id` | bigint | non | → `vas_service` |
+| `code` | character varying(40) | non |  |
+| `title` | character varying(120) | non |  |
+| `body` | character varying(2000) | oui |  |
+| `url` | character varying(400) | oui |  |
+| `max_uses` | integer | non | 1 |
+| `ttl_hours` | integer | non | 24 |
+
+## `content_token`
+
+Jetons de lien à usage limité émis par numéro (hash, expiration, compteur d'usages).
+
+| Colonne | Type | Null | Défaut / référence |
+|---|---|---|---|
+| `id` | bigint | non |  |
+| `token` | character varying(64) | non |  |
+| `item_id` | bigint | non | → `content_item` |
+| `msisdn` | character varying(100) | non |  |
+| `created_at` | timestamp with time zone | non |  |
+| `expires_at` | timestamp with time zone | non |  |
+| `uses` | integer | non | 0 |
 
 ## `keyword`
 
@@ -85,7 +135,7 @@ Ledger d'événements facturables, identifiant unique idempotent, répartition o
 | `operator_id` | bigint | non | → `operator` |
 | `service_id` | bigint | oui | → `vas_service` |
 | `short_code` | character varying(20) | oui |  |
-| `msisdn` | character varying(20) | non |  |
+| `msisdn` | character varying(100) | non |  |
 | `gross_amount` | numeric | non |  |
 | `operator_share` | numeric | non |  |
 | `provider_share` | numeric | non |  |
@@ -106,7 +156,7 @@ SMS entrants (MO) avec clé de dédoublonnage unique par opérateur et issue du 
 | `operator_id` | bigint | non | → `operator` |
 | `dedup_key` | character varying(120) | non |  |
 | `operator_msg_id` | character varying(80) | oui |  |
-| `msisdn` | character varying(20) | non |  |
+| `msisdn` | character varying(100) | non |  |
 | `short_code` | character varying(20) | non |  |
 | `content` | character varying(1000) | non |  |
 | `received_at` | timestamp with time zone | non |  |
@@ -120,7 +170,7 @@ Listes noire/blanche de MSISDN (globales ou par service).
 | Colonne | Type | Null | Défaut / référence |
 |---|---|---|---|
 | `id` | bigint | non |  |
-| `msisdn` | character varying(20) | non |  |
+| `msisdn` | character varying(100) | non |  |
 | `service_id` | bigint | oui | → `vas_service` |
 | `rule_type` | character varying(10) | non |  |
 | `reason` | character varying(200) | oui |  |
@@ -137,7 +187,7 @@ SMS sortants (MT) : statut normalisé + brut, corrélation avec l'ID SMSC, tenta
 | `client_ref` | character varying(80) | oui |  |
 | `operator_id` | bigint | non | → `operator` |
 | `service_id` | bigint | oui | → `vas_service` |
-| `msisdn` | character varying(20) | non |  |
+| `msisdn` | character varying(100) | non |  |
 | `sender` | character varying(20) | non |  |
 | `content` | character varying(1000) | non |  |
 | `encoding` | character varying(10) | non |  |
@@ -153,6 +203,8 @@ SMS sortants (MT) : statut normalisé + brut, corrélation avec l'ID SMSC, tenta
 | `created_at` | timestamp with time zone | non |  |
 | `updated_at` | timestamp with time zone | non |  |
 | `validity_until` | timestamp with time zone | oui |  |
+| `subscription_id` | bigint | oui |  |
+| `scheduled_at` | timestamp with time zone | oui |  |
 
 ## `mt_status_history`
 
@@ -180,6 +232,7 @@ Opérateur mobile et paramètres métier de routage (les secrets SMPP vivent uni
 | `dlr_billing_rule` | character varying(20) | non | 'ON_DELIVERED'::character varying |
 | `max_tps` | integer | non | 50 |
 | `status` | character varying(20) | non | 'ACTIVE'::character varying |
+| `config_applied` | boolean | non | false |
 
 ## `partner`
 
@@ -192,6 +245,55 @@ Partenaire média/club/client : part de revenus et webhook (secret HMAC).
 | `share_percent` | numeric | non | 0 |
 | `webhook_url` | character varying(400) | oui |  |
 | `webhook_secret` | character varying(120) | oui |  |
+| `max_tps` | integer | non | 0 |
+
+## `partner_payout`
+
+Reversements aux partenaires (PENDING → PAID, créateur ≠ payeur, aucun chevauchement de période).
+
+| Colonne | Type | Null | Défaut / référence |
+|---|---|---|---|
+| `id` | bigint | non |  |
+| `partner_id` | bigint | non | → `partner` |
+| `from_at` | timestamp with time zone | non |  |
+| `to_at` | timestamp with time zone | non |  |
+| `amount` | numeric | non |  |
+| `status` | character varying(10) | non |  |
+| `created_at` | timestamp with time zone | non |  |
+| `created_by` | character varying(80) | non |  |
+| `paid_at` | timestamp with time zone | oui |  |
+| `paid_by` | character varying(80) | oui |  |
+| `reference` | character varying(100) | oui |  |
+
+## `quiz_progress`
+
+Progression d'un participant (question courante, score, terminé) : une partie par numéro et par service.
+
+| Colonne | Type | Null | Défaut / référence |
+|---|---|---|---|
+| `id` | bigint | non |  |
+| `service_id` | bigint | non | → `vas_service` |
+| `msisdn` | character varying(100) | non |  |
+| `current_position` | integer | non |  |
+| `score` | integer | non | 0 |
+| `status` | character varying(12) | non |  |
+| `started_at` | timestamp with time zone | non |  |
+| `completed_at` | timestamp with time zone | oui |  |
+
+## `quiz_question`
+
+Questions de quiz par service (rang, réponses acceptées séparées par « | », points, réponses).
+
+| Colonne | Type | Null | Défaut / référence |
+|---|---|---|---|
+| `id` | bigint | non |  |
+| `service_id` | bigint | non | → `vas_service` |
+| `position` | integer | non |  |
+| `question` | character varying(500) | non |  |
+| `answers` | character varying(300) | non |  |
+| `points` | integer | non | 1 |
+| `reply_correct` | character varying(300) | oui |  |
+| `reply_wrong` | character varying(300) | oui |  |
 
 ## `recon_item`
 
@@ -240,12 +342,13 @@ Abonnement d'un MSISDN à un service (statut, prochain renouvellement).
 | Colonne | Type | Null | Défaut / référence |
 |---|---|---|---|
 | `id` | bigint | non |  |
-| `msisdn` | character varying(20) | non |  |
+| `msisdn` | character varying(100) | non |  |
 | `service_id` | bigint | non | → `vas_service` |
 | `status` | character varying(20) | non |  |
 | `activated_at` | timestamp with time zone | oui |  |
 | `next_renewal_at` | timestamp with time zone | oui |  |
 | `stopped_at` | timestamp with time zone | oui |  |
+| `renewal_failures` | integer | non | 0 |
 
 ## `tariff`
 
@@ -287,6 +390,32 @@ Service VAS (vote, quiz, contenu premium, abonnement, alerte) : statut, fenêtre
 | `reply_limit` | character varying(500) | oui |  |
 | `reply_closed` | character varying(500) | oui |  |
 | `default_lang` | character varying(2) | non | 'fr'::character varying |
+| `closed_at` | timestamp with time zone | oui |  |
+| `max_tps` | integer | non | 0 |
+
+## `vote_ballot`
+
+Bulletins de vote : un par numéro et par service (unicité), option choisie et horodatage.
+
+| Colonne | Type | Null | Défaut / référence |
+|---|---|---|---|
+| `id` | bigint | non |  |
+| `service_id` | bigint | non | → `vas_service` |
+| `msisdn` | character varying(100) | non |  |
+| `option_code` | character varying(40) | non |  |
+| `created_at` | timestamp with time zone | non |  |
+| `mo_id` | bigint | oui |  |
+
+## `vote_option`
+
+Options de vote déclarées d'un service (code court + libellé) ; sans option, tout texte est accepté.
+
+| Colonne | Type | Null | Défaut / référence |
+|---|---|---|---|
+| `id` | bigint | non |  |
+| `service_id` | bigint | non | → `vas_service` |
+| `code` | character varying(40) | non |  |
+| `label` | character varying(120) | non |  |
 
 ## `webhook_outbox`
 

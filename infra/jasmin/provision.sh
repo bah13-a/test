@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Provisionne Jasmin : groupe, callback HTTP MO, puis un connecteur SMPP + utilisateur + route MT par opérateur.
-# Variables par opérateur (préfixe TT_, ORANGE_, OOREDOO_) : SMSC_HOST SMSC_PORT SYSTEM_ID SMSC_PASSWORD [SYSTEM_TYPE BIND_MODE SRC_TON SRC_NPI DST_TON DST_NPI ELINK TPS]
+# Variables par opérateur (préfixe TT_, ORANGE_, OOREDOO_) : SMSC_HOST [SMSC_HOST_2..4 LINK_MODE=failover|roundrobin] SMSC_PORT SYSTEM_ID SMSC_PASSWORD [SYSTEM_TYPE BIND_MODE SRC_TON SRC_NPI DST_TON DST_NPI ELINK TPS]
 # Variables globales : JASMIN_PASSWORD CALLBACK_SECRET [JCLI_HOST=jasmin JCLI_PORT=8990 JCLI_USER=jcliadmin JCLI_PASSWORD APP_URL=http://app:8080 DRY_RUN=1]
 # Un opérateur dont SMSC_HOST est vide est ignoré. Usage : DRY_RUN=1 ./provision.sh | ./provision.sh
 set -euo pipefail
@@ -43,9 +43,21 @@ for op in TT ORANGE OOREDOO; do
   host_var="${op}_SMSC_HOST"
   [[ -n "${!host_var:-}" ]] || { echo "# ${op} ignoré (${host_var} vide)" >&2; continue; }
   get() { local v="${op}_$1"; echo "${!v:-${2:-}}"; }
-  export OPL="${op,,}" SMSC_HOST="$(get SMSC_HOST)" SMSC_PORT="$(get SMSC_PORT 2775)" SYSTEM_ID="$(get SYSTEM_ID)" SMSC_PASSWORD="$(get SMSC_PASSWORD)" \
+  export OPL="${op,,}" SMSC_PORT="$(get SMSC_PORT 2775)" SYSTEM_ID="$(get SYSTEM_ID)" SMSC_PASSWORD="$(get SMSC_PASSWORD)" \
          SYSTEM_TYPE="$(get SYSTEM_TYPE VAS)" BIND_MODE="$(get BIND_MODE transceiver)" SRC_TON="$(get SRC_TON 3)" SRC_NPI="$(get SRC_NPI 0)" \
          DST_TON="$(get DST_TON 1)" DST_NPI="$(get DST_NPI 1)" ELINK="$(get ELINK 30)" TPS="$(get TPS 50)" ORDER="$order" JASMIN_PASSWORD
+  # liaisons : <OP>_SMSC_HOST (principale) puis <OP>_SMSC_HOST_2 .. _4 (secours ou répartition, même compte SMPP)
+  links=(); connectors=()
+  for n in 1 2 3 4; do
+    suffix=""; [[ $n -gt 1 ]] && suffix="_$n"
+    h="$(get "SMSC_HOST$suffix")"; [[ -n "$h" ]] || continue
+    export CID="${OPL}${suffix}" LINK_HOST="$h"
+    render < "$here/connector.jcli.tpl" >> "$out"
+    connectors+=("smppc(smppc_${CID})")
+  done
+  if [[ ${#connectors[@]} -eq 1 ]]; then export ROUTE_TYPE=StaticMTRoute ROUTE_CONNECTORS="connector ${connectors[0]}"
+  elif [[ "$(get LINK_MODE failover)" == "roundrobin" ]]; then export ROUTE_TYPE=RandomRoundrobinMTRoute ROUTE_CONNECTORS="connectors $(IFS=';'; echo "${connectors[*]}")"
+  else export ROUTE_TYPE=FailoverMTRoute ROUTE_CONNECTORS="connectors $(IFS=';'; echo "${connectors[*]}")"; fi
   render < "$here/operator.jcli.tpl" >> "$out"
   order=$((order + 10))
 done
