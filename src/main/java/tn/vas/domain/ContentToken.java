@@ -5,16 +5,16 @@ import java.time.Instant;
 import lombok.Getter;
 import lombok.Setter;
 
-/** Règle d'exclusion (BLACK) ou d'autorisation exclusive (WHITE) ; service_id null = globale. */
 @Entity
-@Table(name = "msisdn_rule")
+@Table(name = "content_token")
 @Getter
 @Setter
-public class MsisdnRule {
+public class ContentToken {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
+    private String token;
+    @ManyToOne(optional=false) private ContentItem item;
     @Convert(converter = tn.vas.security.MsisdnConverter.class) private String msisdn;
-    @ManyToOne private VasService service;
-    private String ruleType;
-    private String reason;
     private Instant createdAt;
+    private Instant expiresAt;
+    private int uses;
 }

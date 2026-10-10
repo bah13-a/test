@@ -2,6 +2,7 @@ package tn.vas.service;
 
 import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,7 +31,13 @@ public class MtService {
 
     public record Request(Operator operator, VasService service, String msisdn, String sender, String content,
                           Priority priority, String clientRef, EventType billingType, Long moId, Long apiClientId,
-                          Duration validity) {}
+                          Duration validity, Long subscriptionId, Instant scheduledAt) {
+        /** Envoi immédiat, hors abonnement. */
+        public Request(Operator operator, VasService service, String msisdn, String sender, String content, Priority priority, String clientRef,
+                       EventType billingType, Long moId, Long apiClientId, Duration validity) {
+            this(operator, service, msisdn, sender, content, priority, clientRef, billingType, moId, apiClientId, validity, null, null);
+        }
+    }
 
     /** Persiste le MT (PENDING) puis publie en file après commit. Le ledger est ouvert dès l'acceptation si facturable. */
     @Transactional
@@ -52,14 +59,17 @@ public class MtService {
         m.setApiClientId(r.apiClientId());
         m.setCreatedAt(now);
         m.setUpdatedAt(now);
-        if (r.validity() != null) m.setValidityUntil(now.plus(r.validity()));
+        m.setSubscriptionId(r.subscriptionId());
+        boolean later = r.scheduledAt() != null && r.scheduledAt().isAfter(now);
+        m.setScheduledAt(later ? r.scheduledAt() : null);
+        if (r.validity() != null) m.setValidityUntil((later ? r.scheduledAt() : now).plus(r.validity()));
         m = mts.save(m);
         record(m, MtStatus.PENDING, null);
         if (r.billingType() != null && r.service() != null
                 && ledger.record("MT-" + m.getCorrelationId(), r.billingType(), m, r.service()).isPresent()) {
             m.setBillable(true);
         }
-        queue.publish(m.getCorrelationId(), m.getPriority());
+        if (!later) queue.publish(m.getCorrelationId(), m.getPriority()); // programmé : publié par MtSweeper à l'échéance
         return m;
     }
 

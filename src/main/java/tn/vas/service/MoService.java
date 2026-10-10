@@ -32,12 +32,20 @@ public class MoService {
     private final ReplyRepo replies;
     private final WebhookService webhooks;
     private final RuleRepo rules;
+    private final VoteService vote;
+    private final QuizService quiz;
+    private final ContentService content;
+    private final RenewalOutcome renewals;
 
     public MoService(OperatorRepo operators, ShortCodeRepo shortCodes, KeywordRepo keywords, MoRepo mos,
                      SubscriptionRepo subs, ConsentRepo consents, MtService mt, AuditService audit,
                      VasProperties props, Clock clock, io.micrometer.core.instrument.MeterRegistry metrics,
-                     ReplyRepo replies, WebhookService webhooks, RuleRepo rules) {
+                     ReplyRepo replies, WebhookService webhooks, RuleRepo rules, VoteService vote, QuizService quiz, ContentService content, RenewalOutcome renewals) {
+        this.renewals = renewals;
         this.rules = rules;
+        this.vote = vote;
+        this.quiz = quiz;
+        this.content = content;
         this.metrics = metrics;
         this.replies = replies;
         this.webhooks = webhooks;
@@ -93,6 +101,8 @@ public class MoService {
             outcome = help(mo, sc, tokens);
         } else if (YES_WORDS.contains(first) && confirmPending(mo, sc)) {
             outcome = MoOutcome.ROUTED;
+        } else if (keywords.findByShortCodeAndWord(sc, first).isEmpty() && quiz.active(msisdn, sc) != null) {
+            outcome = quizAnswer(mo, sc, text);   // pas de mot-clé et une partie de quiz en cours : le message est une réponse
         } else {
             outcome = route(mo, sc, first, text);
         }
@@ -135,8 +145,42 @@ public class MoService {
         if (svc.getType() == ServiceType.SUBSCRIPTION) {
             subscribe(mo, svc, text);
         } else {
-            reply(mo, svc, text(svc, Messages.OK, svc.getReplyOk(), mo), EventType.MT);
+            Engines.Reply r = engine(svc, mo, text);
+            if (r == null) {
+                reply(mo, svc, text(svc, Messages.OK, svc.getReplyOk(), mo), EventType.MT);   // service générique : accusé de réception
+            } else {
+                reply(mo, svc, r.text(), r.billing());
+                if (r.outcome() != MoOutcome.ROUTED) return r.outcome();
+            }
         }
+        webhooks.enqueueMo(mo, svc);
+        return MoOutcome.ROUTED;
+    }
+
+    /** Moteur spécifique du type de service (vote à choix, quiz, contenu premium) ; null = comportement générique. */
+    private Engines.Reply engine(VasService svc, MoMessage mo, String text) {
+        String lang = Messages.detect(mo.getContent(), svc.getDefaultLang());
+        String[] words = text.isEmpty() ? new String[0] : text.split("\\s+");
+        return switch (svc.getType()) {
+            case VOTE -> vote.handle(svc, mo, words, lang);
+            case QUIZ -> quiz.start(svc, mo.getMsisdn(), lang);
+            case PREMIUM_CONTENT -> content.handle(svc, mo.getMsisdn(), words, lang);
+            default -> null;
+        };
+    }
+
+    private MoOutcome quizAnswer(MoMessage mo, ShortCode sc, String text) {
+        var p = quiz.active(mo.getMsisdn(), sc);
+        var svc = p.getService();
+        mo.setService(svc);
+        var now = clock.instant();
+        if (svc.getStatus() != ServiceStatus.ACTIVE || (svc.getClosesAt() != null && now.isAfter(svc.getClosesAt()))) {
+            reply(mo, svc, text(svc, Messages.CLOSED, svc.getReplyClosed(), mo), null);
+            return MoOutcome.SERVICE_CLOSED;
+        }
+        var r = quiz.answer(p, text, Messages.detect(mo.getContent(), svc.getDefaultLang()));
+        if (r == null) return MoOutcome.UNKNOWN_KEYWORD;
+        reply(mo, svc, r.text(), r.billing());
         webhooks.enqueueMo(mo, svc);
         return MoOutcome.ROUTED;
     }
@@ -178,7 +222,8 @@ public class MoService {
         sub.setStatus(SubStatus.ACTIVE);
         sub.setActivatedAt(now);
         sub.setStoppedAt(null);
-        sub.setNextRenewalAt(now.plus(Duration.ofDays(30)));
+        sub.setNextRenewalAt(now.plus(Duration.ofDays(renewals.renewalDays())));
+        sub.setRenewalFailures(0);
         subs.save(sub);
         consent(mo.getMsisdn(), svc, "ACTIVATED", "SMS", proof);
         reply(mo, svc, text(svc, Messages.SUB_OK, svc.getReplyOk(), mo), EventType.SUBSCRIPTION);

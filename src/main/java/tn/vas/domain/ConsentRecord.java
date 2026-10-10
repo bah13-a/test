@@ -13,7 +13,7 @@ import static tn.vas.domain.Enums.*;
 @Setter
 public class ConsentRecord {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
-    private String msisdn;
+    @Convert(converter = tn.vas.security.MsisdnConverter.class) private String msisdn;
     @ManyToOne(optional=false) private VasService service;
     private String action;
     private String channel;

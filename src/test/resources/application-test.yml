@@ -19,6 +19,7 @@ vas:
   rate-limit: memory
   public-base-url: http://localhost
   mo-dedup-seconds: 30
+  data-key: test-data-key-0123456789abcdef0123456789abcdef
   token-secret: test-token-secret-0123456789abcdef
   mfa-enforced: false
   jasmin:

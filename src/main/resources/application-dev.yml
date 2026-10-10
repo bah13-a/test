@@ -22,6 +22,7 @@ vas:
   rate-limit: memory
   mfa-enforced: false          # MFA possible mais non imposé en démonstration
   public-base-url: http://localhost:8080
+  data-key: dev-data-key-0123456789abcdef0123456789abcdef
   token-secret: dev-token-secret-0123456789abcdef
   jasmin: { base-url: "mock", password: dev-jasmin-password, simulator: true }
   callback: { shared-secret: dev-callback-secret }

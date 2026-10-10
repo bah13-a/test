@@ -14,8 +14,10 @@ public class SubscriptionService {
     private final MtService mt;
     private final Clock clock;
     private final tn.vas.repo.Repos.ConsentRepo consents;
+    private final RenewalOutcome renewals;
 
-    public SubscriptionService(SubscriptionRepo subs, MtService mt, Clock clock, tn.vas.repo.Repos.ConsentRepo consents) {
+    public SubscriptionService(SubscriptionRepo subs, MtService mt, Clock clock, tn.vas.repo.Repos.ConsentRepo consents, RenewalOutcome renewals) {
+        this.renewals = renewals;
         this.consents = consents;
         this.subs = subs;
         this.mt = mt;
@@ -32,8 +34,8 @@ public class SubscriptionService {
             var svc = s.getService();
             mt.submit(new MtService.Request(svc.getShortCode().getOperator(), svc, s.getMsisdn(), svc.getShortCode().getNumber(),
                     String.format(Messages.text(svc.getDefaultLang(), Messages.RENEWAL), svc.getName()),
-                    Priority.CONFIRMATION, null, EventType.RENEWAL, null, null, Duration.ofHours(24)));
-            s.setNextRenewalAt(now.plus(Duration.ofDays(30)));
+                    Priority.CONFIRMATION, null, EventType.RENEWAL, null, null, Duration.ofHours(24), s.getId(), null));
+            s.setNextRenewalAt(now.plus(Duration.ofDays(renewals.guardDays()))); // garde ; le résultat (DLR) fixe la vraie prochaine échéance
             subs.save(s);
             n++;
         }
@@ -46,6 +48,7 @@ public class SubscriptionService {
             s.setStatus(SubStatus.STOPPED);
             s.setStoppedAt(clock.instant());
             s.setNextRenewalAt(null);
+            s.setRenewalFailures(0);
             subs.save(s);
         });
     }
@@ -67,7 +70,7 @@ public class SubscriptionService {
         sub.setStatus(SubStatus.ACTIVE);
         sub.setActivatedAt(now);
         sub.setStoppedAt(null);
-        sub.setNextRenewalAt(now.plus(Duration.ofDays(30)));
+        sub.setNextRenewalAt(now.plus(Duration.ofDays(renewals.renewalDays())));
         sub = subs.save(sub);
         var c = new tn.vas.domain.ConsentRecord();
         c.setMsisdn(msisdn);

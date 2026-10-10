@@ -52,7 +52,8 @@ final class Exports {
 
     private static byte[] xlsx(String title, List<String> cols, List<? extends Map<String, ?>> rows) throws IOException {
         try (Workbook wb = new XSSFWorkbook(); var out = new ByteArrayOutputStream()) {
-            Sheet sh = wb.createSheet(title.length() > 30 ? title.substring(0, 30) : title);
+            String sheetName = title.replaceAll("[\\\\/?*\\[\\]:]", "-").strip(); // Excel interdit \ / ? * [ ] : dans un nom de feuille (max 31 caractères)
+            Sheet sh = wb.createSheet(sheetName.isEmpty() ? "Export" : sheetName.length() > 31 ? sheetName.substring(0, 31) : sheetName);
             org.apache.poi.ss.usermodel.Row h = sh.createRow(0);
             for (int i = 0; i < cols.size(); i++) h.createCell(i).setCellValue(cols.get(i));
             int n = 1;

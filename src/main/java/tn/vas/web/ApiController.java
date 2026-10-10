@@ -32,9 +32,11 @@ public class ApiController {
     private final SubscriptionService subscriptionService;
     private final RuleRepo rules;
     private final AuditService audit;
+    private final ContentService contentService;
 
     public ApiController(MtService mtService, MtRepo mts, MtHistoryRepo history, OperatorRepo operators, ServiceRepo services,
-                         MoRepo mos, SubscriptionRepo subs, SubscriptionService subscriptionService, RuleRepo rules, AuditService audit) {
+                         MoRepo mos, SubscriptionRepo subs, SubscriptionService subscriptionService, RuleRepo rules, AuditService audit, ContentService contentService) {
+        this.contentService = contentService;
         this.rules = rules;
         this.audit = audit;
         this.mtService = mtService;
@@ -130,6 +132,24 @@ public class ApiController {
         ownedService(p.client(), s.getService().getId());
         subscriptionService.stop(s.getMsisdn(), s.getService());
         return ResponseEntity.noContent().build();
+    }
+
+    public record LinkRequest(@NotBlank String msisdn, String code) {}
+
+    /** UC-03 : émet un lien de contenu premium à jeton et l'envoie au numéro par MT facturable. */
+    @PostMapping("/content/{serviceId}/links")
+    @PreAuthorize("hasAuthority('SCOPE_messages:send')")
+    public ResponseEntity<MessageView> contentLink(@AuthenticationPrincipal ApiPrincipal p, @PathVariable Long serviceId, @Valid @RequestBody LinkRequest r) {
+        var svc = ownedService(p.client(), serviceId);
+        if (svc.getType() != ServiceType.PREMIUM_CONTENT || svc.getStatus() != ServiceStatus.ACTIVE) throw new ResponseStatusException(HttpStatus.CONFLICT, "service de contenu premium actif requis");
+        String msisdn = Text.normalizeMsisdn(r.msisdn());
+        if (msisdn == null) throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "MSISDN invalide");
+        if (rules.blacklisted(msisdn, svc) || (rules.whitelistSize(svc) > 0 && !rules.whitelisted(msisdn, svc))) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "destinataire exclu");
+        try {
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(view(contentService.sendLink(svc, msisdn, r.code(), p.client().getId())));
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, e.getMessage());
+        }
     }
 
     @GetMapping("/health")

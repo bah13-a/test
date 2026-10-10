@@ -5,16 +5,17 @@ import java.time.Instant;
 import lombok.Getter;
 import lombok.Setter;
 
-/** Règle d'exclusion (BLACK) ou d'autorisation exclusive (WHITE) ; service_id null = globale. */
 @Entity
-@Table(name = "msisdn_rule")
+@Table(name = "quiz_progress")
 @Getter
 @Setter
-public class MsisdnRule {
+public class QuizProgress {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
+    @ManyToOne(optional=false) private VasService service;
     @Convert(converter = tn.vas.security.MsisdnConverter.class) private String msisdn;
-    @ManyToOne private VasService service;
-    private String ruleType;
-    private String reason;
-    private Instant createdAt;
+    private int currentPosition;
+    private int score;
+    private String status;
+    private Instant startedAt;
+    private Instant completedAt;
 }

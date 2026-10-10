@@ -14,8 +14,10 @@ public class DlrService {
     private final LedgerService ledger;
     private final WebhookService webhooks;
     private final Clock clock;
+    private final RenewalOutcome renewals;
 
-    public DlrService(MtRepo mts, MtService mtService, LedgerService ledger, WebhookService webhooks, Clock clock) {
+    public DlrService(MtRepo mts, MtService mtService, LedgerService ledger, WebhookService webhooks, Clock clock, RenewalOutcome renewals) {
+        this.renewals = renewals;
         this.mts = mts;
         this.mtService = mtService;
         this.ledger = ledger;
@@ -50,7 +52,10 @@ public class DlrService {
                 ledger.transition(eventId, BillingStatus.DISPUTED); // facturé au submit mais non livré
             }
         }
-        if (DlrMapper.isFinal(next)) webhooks.enqueueDlr(m);
+        if (DlrMapper.isFinal(next)) {
+            webhooks.enqueueDlr(m);
+            renewals.onResult(m, next == MtStatus.DELIVERED);
+        }
         return true;
     }
 

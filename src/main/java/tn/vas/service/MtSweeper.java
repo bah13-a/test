@@ -30,8 +30,18 @@ public class MtSweeper {
     @Scheduled(fixedDelayString = "${vas.sweeper-interval-ms:15000}")
     public void sweep() {
         var cutoff = clock.instant().minus(Duration.ofSeconds(props.retry().backoffSeconds()));
+        var now = clock.instant();
+        // envois programmés arrivés à échéance : publiés une seule fois (updated_at passe à « maintenant »)
+        for (var m : mts.findDueScheduled(MtStatus.PENDING, now)) {
+            if (m.getAttempts() == 0 && m.getUpdatedAt().isBefore(m.getScheduledAt())) {
+                m.setUpdatedAt(now);
+                mts.save(m);
+                queue.publish(m.getCorrelationId(), m.getPriority());
+            }
+        }
         for (var m : mts.findByStatusAndCreatedAtBefore(MtStatus.PENDING, cutoff)) {
-            if (m.getUpdatedAt().isBefore(cutoff)) queue.publish(m.getCorrelationId(), m.getPriority());
+            boolean notYetDue = m.getScheduledAt() != null && m.getScheduledAt().isAfter(now);
+            if (!notYetDue && m.getUpdatedAt().isBefore(cutoff)) queue.publish(m.getCorrelationId(), m.getPriority());
         }
     }
 

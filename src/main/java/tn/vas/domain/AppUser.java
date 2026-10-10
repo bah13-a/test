@@ -20,4 +20,6 @@ public class AppUser {
     private boolean active = true;
     private int failedLogins;
     private Instant lockedUntil;
+    private boolean mustChangePassword;
+    private int tokenVersion;
 }

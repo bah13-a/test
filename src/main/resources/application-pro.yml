@@ -32,6 +32,7 @@ vas:
   rate-limit: redis
   mfa-enforced: true
   public-base-url: ${VAS_PUBLIC_BASE_URL}   # URL de rappel des DLR vue par Jasmin (réseau interne), ex. http://app.vas.internal:8080 (nom AVEC point : exigence de Jasmin)
+  data-key: ${DATA_KEY}                     # >= 32 caractères : chiffre les numéros de téléphone en base. À SAUVEGARDER HORS SERVEUR : sa perte rend les numéros irrécupérables
   token-secret: ${TOKEN_SECRET}             # >= 32 caractères, identique sur toutes les instances
   jasmin:
     base-url: ${JASMIN_URL}

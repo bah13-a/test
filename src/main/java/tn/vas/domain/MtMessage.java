@@ -17,7 +17,7 @@ public class MtMessage {
     private String clientRef;
     @ManyToOne(optional=false) private Operator operator;
     @ManyToOne private VasService service;
-    private String msisdn;
+    @Convert(converter = tn.vas.security.MsisdnConverter.class) private String msisdn;
     private String sender;
     private String content;
     private String encoding;
@@ -33,4 +33,6 @@ public class MtMessage {
     private Instant createdAt;
     private Instant updatedAt;
     private Instant validityUntil;
+    private Long subscriptionId;
+    private Instant scheduledAt;
 }

@@ -28,9 +28,11 @@ public class MtDispatcher {
     private final TransactionTemplate tx;
     private final VasProperties props;
     private final Clock clock;
+    private final RenewalOutcome renewals;
 
     public MtDispatcher(MtRepo mts, SmsGateway gateway, RateGate gate, LedgerService ledger, MtService mtService,
-                        PlatformTransactionManager txm, VasProperties props, Clock clock) {
+                        PlatformTransactionManager txm, VasProperties props, Clock clock, RenewalOutcome renewals) {
+        this.renewals = renewals;
         this.mts = mts;
         this.gateway = gateway;
         this.gate = gate;
@@ -50,6 +52,10 @@ public class MtDispatcher {
                 finish(correlationId, MtStatus.EXPIRED, "VALIDITY");
                 return;
             }
+            // MT-007 : plafonds de débit par partenaire, par service puis par opérateur (0 = illimité)
+            var svc = m.getService();
+            if (svc != null && svc.getPartner() != null) gate.acquire("partner:" + svc.getPartner().getId(), svc.getPartner().getMaxTps());
+            if (svc != null) gate.acquire("service:" + svc.getId(), svc.getMaxTps());
             gate.acquire(m.getOperator().getCode(), m.getOperator().getMaxTps());
             var res = gateway.send(m);
             tx.executeWithoutResult(s -> {
@@ -72,6 +78,7 @@ public class MtDispatcher {
                     cur.setRawStatus(res.error());
                     mtService.record(cur, MtStatus.FAILED, res.error());
                     if (cur.isBillable()) ledger.transition("MT-" + cur.getCorrelationId(), BillingStatus.REJECTED);
+                    renewals.onResult(cur, false);   // échec définitif d'un MT de renouvellement
                 }
                 mts.save(cur);
             });
@@ -91,6 +98,7 @@ public class MtDispatcher {
             mts.save(cur);
             mtService.record(cur, status, raw);
             if (cur.isBillable()) ledger.transition("MT-" + cid, BillingStatus.REJECTED);
+            renewals.onResult(cur, false);       // expiré avant envoi
         });
     }
 }

@@ -24,9 +24,11 @@ public class PortalController {
     private final MtRepo mts;
     private final LedgerRepo ledger;
     private final tn.vas.service.AuditService audit;
+    private final tn.vas.service.CampaignService campaigns;
 
-    public PortalController(ServiceRepo services, MoRepo mos, MtRepo mts, LedgerRepo ledger, tn.vas.service.AuditService audit) {
+    public PortalController(ServiceRepo services, MoRepo mos, MtRepo mts, LedgerRepo ledger, tn.vas.service.AuditService audit, tn.vas.service.CampaignService campaigns) {
         this.audit = audit;
+        this.campaigns = campaigns;
         this.services = services;
         this.mos = mos;
         this.mts = mts;
@@ -67,10 +69,7 @@ public class PortalController {
     @GetMapping("/results")
     public List<Map<String, Object>> results(@AuthenticationPrincipal AppUserDetails me, @RequestParam Long serviceId) {
         var s = ownedService(me, serviceId);
-        Map<String, Long> merged = new TreeMap<>(); // regroupement insensible à la casse côté Java (la locale SQL peut varier)
-        for (Object[] o : mos.resultsByContent(s)) merged.merge(String.valueOf(o[0]).trim().toUpperCase(Locale.ROOT), (Long) o[1], Long::sum);
-        return merged.entrySet().stream().sorted((a, b) -> Long.compare(b.getValue(), a.getValue()))
-                .map(e -> Map.<String, Object>of("content", e.getKey(), "count", e.getValue())).toList();
+        return campaigns.results(s);
     }
 
     @GetMapping("/export")

@@ -52,6 +52,7 @@ class FlowTests {
     ShortCode sc;
     VasService vote;
     VasService abo;
+    static final java.util.concurrent.atomic.AtomicInteger SN = new java.util.concurrent.atomic.AtomicInteger(10000 + (int) (Math.random() * 40000));
     String sn;           // préfixe unique par test (isolation sans nettoyage de base)
 
     void user(String name, String role, Partner partner) {
@@ -63,7 +64,7 @@ class FlowTests {
         user("admin", "SUPER_ADMIN", null);
         user("finance", "FINANCE", null);
         user("finance2", "FINANCE", null);
-        sn = String.valueOf(10000 + (int) (Math.random() * 89999));
+        sn = String.valueOf(SN.incrementAndGet()); // compteur : jamais deux short codes identiques (le tirage aléatoire entrait en collision)
         tt = operators.findByCode("TT").orElseThrow();
         sc = new ShortCode();
         sc.setNumber(sn);
@@ -408,6 +409,121 @@ class FlowTests {
     @Autowired WebhookRepo webhooks;
     @Autowired AuditRepo auditRepo;
     @Autowired MtSweeper mtSweeper;
+    @Autowired VoteOptionRepo voteOptions;
+    @Autowired QuizQuestionRepo quizQuestions;
+    @Autowired ContentItemRepo contentItems;
+
+    private VasService typed(String name, ServiceType type, String keyword) {
+        var s = newService(name + " " + sn, type, ConsentMode.SIMPLE_OPT_IN, null);
+        keyword(s, keyword);
+        tariff(s, EventType.MT, "0.500");
+        return s;
+    }
+
+    @Test
+    void voteWithDeclaredOptionsRejectsInvalidChoiceAndPublishesOfficialResults() throws Exception {
+        var v = typed("VoteOpt", ServiceType.VOTE, "VOTEOPT");
+        for (String[] o : new String[][]{{"A", "Alice"}, {"B", "Bob"}}) { var x = new VoteOption(); x.setService(v); x.setCode(o[0]); x.setLabel(o[1]); voteOptions.save(x); }
+        String f1 = msisdn(), f2 = msisdn(), f3 = msisdn();
+        mo(UUID.randomUUID().toString(), f1, "VOTEOPT A");
+        mo(UUID.randomUUID().toString(), f2, "voteopt a");
+        mo(UUID.randomUUID().toString(), f3, "VOTEOPT B");
+        // choix invalide ou absent : réponse explicative, jamais facturée, bulletin non compté
+        String f4 = msisdn();
+        mo(UUID.randomUUID().toString(), f4, "VOTEOPT Z");
+        var bad = lastMt("+216" + f4);
+        assertTrue(bad.getContent().contains("A, B"), bad.getContent());
+        assertFalse(bad.isBillable());
+        mo(UUID.randomUUID().toString(), msisdn(), "VOTEOPT");
+        var adminBasic = httpBasic("admin", PW);
+        mvc.perform(get("/admin/services/" + v.getId() + "/campaign").with(adminBasic)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[0].count").value(2)).andExpect(jsonPath("$.results[0].detail").value("66.7 %"))
+                .andExpect(jsonPath("$.participants").value(5)).andExpect(jsonPath("$.mo.INVALID_CHOICE").value(2));
+        // clôture : résultats officiels figés, plus aucun vote accepté
+        mvc.perform(post("/admin/services/" + v.getId() + "/close").with(adminBasic)).andExpect(status().isOk()).andExpect(jsonPath("$.results[0].content").value("A — Alice"));
+        mvc.perform(post("/admin/services/" + v.getId() + "/close").with(adminBasic)).andExpect(status().isConflict());
+        String f5 = msisdn();
+        mo(UUID.randomUUID().toString(), f5, "VOTEOPT A");
+        mvc.perform(get("/admin/services/" + v.getId() + "/campaign").with(adminBasic)).andExpect(jsonPath("$.results[0].count").value(2)).andExpect(jsonPath("$.status").value("CLOSED"));
+        mvc.perform(get("/admin/services/" + v.getId() + "/campaign/export").param("format", "pdf").with(adminBasic)).andExpect(status().isOk()).andExpect(content().contentType(MediaType.APPLICATION_PDF));
+        mvc.perform(get("/admin/services/" + v.getId() + "/campaign/export").param("format", "xlsx").with(adminBasic)).andExpect(status().isOk());
+    }
+
+    @Test
+    void quizAsksQuestionsInSequenceScoresAnswersAndAllowsOnePlay() throws Exception {
+        var q = typed("Quiz", ServiceType.QUIZ, "QUIZGO");
+        for (int i = 1; i <= 3; i++) {
+            var x = new QuizQuestion();
+            x.setService(q); x.setPosition(i); x.setPoints(i == 3 ? 2 : 1);
+            x.setQuestion(new String[]{"", "Capitale de la Tunisie ?", "2+2 ?", "Capitale de l'Égypte ?"}[i]);
+            x.setAnswers(new String[]{"", "Tunis|تونس", "4|quatre", "Le Caire|القاهرة"}[i]);
+            quizQuestions.save(x);
+        }
+        String from = msisdn();
+        mo(UUID.randomUUID().toString(), from, "QUIZGO");
+        assertTrue(lastMt("+216" + from).getContent().contains("Question 1/3 : Capitale de la Tunisie ?"));
+        assertTrue(lastMt("+216" + from).isBillable());
+        mo(UUID.randomUUID().toString(), from, "  tunis ");                       // casse et espaces ignorés
+        var second = lastMt("+216" + from).getContent();
+        assertTrue(second.contains("Bonne réponse") && second.contains("Question 2/3 : 2+2 ?"), second);
+        mo(UUID.randomUUID().toString(), from, "cinq");                           // mauvaise réponse
+        assertTrue(lastMt("+216" + from).getContent().contains("Mauvaise réponse") && lastMt("+216" + from).getContent().contains("Question 3/3"));
+        mo(UUID.randomUUID().toString(), from, "le caire");                       // 2 points
+        assertTrue(lastMt("+216" + from).getContent().contains("score : 3/4"), lastMt("+216" + from).getContent());
+        // une seule partie par numéro
+        mo(UUID.randomUUID().toString(), from, "QUIZGO encore");   // texte différent : sinon le dédoublonnage (30 s) l'ignore
+        assertTrue(lastMt("+216" + from).getContent().contains("déjà participé"));
+        // classement dans les résultats de la campagne
+        mvc.perform(get("/admin/services/" + q.getId() + "/campaign").with(httpBasic("admin", PW))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[0].content").value("Parties terminées")).andExpect(jsonPath("$.results[0].count").value(1))
+                .andExpect(jsonPath("$.results[2].content").value(org.hamcrest.Matchers.startsWith("#1 +216")));
+        // réponse arabe sans diacritiques sur une autre partie
+        String ar = msisdn();
+        mo(UUID.randomUUID().toString(), ar, "QUIZGO");
+        mo(UUID.randomUUID().toString(), ar, "تُونْس");
+        assertTrue(lastMt("+216" + ar).getContent().contains("إجابة صحيحة") && lastMt("+216" + ar).getContent().contains("2/3: 2+2"), lastMt("+216" + ar).getContent()); // réponse arabe sans diacritiques, retour en arabe
+    }
+
+    @Test
+    void premiumContentIsDeliveredByLimitedTokenLink() throws Exception {
+        var c = typed("Premium", ServiceType.PREMIUM_CONTENT, "CODEIT");
+        var item = new ContentItem();
+        item.setService(c); item.setCode("GUIDE"); item.setTitle("Guide <b>VIP</b>"); item.setBody("Contenu secret"); item.setUrl("https://exemple.tn/guide"); item.setMaxUses(2); item.setTtlHours(1);
+        contentItems.save(item);
+        String from = msisdn();
+        mo(UUID.randomUUID().toString(), from, "CODEIT");   // un seul contenu : choisi automatiquement
+        var m = lastMt("+216" + from);
+        assertTrue(m.isBillable());
+        var matcher = java.util.regex.Pattern.compile("/c/([A-Za-z0-9_-]{20,})").matcher(m.getContent());
+        assertTrue(matcher.find(), m.getContent());
+        String token = matcher.group(1);
+        // 2 ouvertures autorisées (JSON puis HTML échappé), la 3e est refusée
+        mvc.perform(get("/c/" + token)).andExpect(status().isOk()).andExpect(jsonPath("$.body").value("Contenu secret"));
+        var html = mvc.perform(get("/c/" + token).header("Accept", "text/html")).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(html.contains("Guide &lt;b&gt;VIP&lt;/b&gt;") && !html.contains("<b>VIP"), html);
+        mvc.perform(get("/c/" + token)).andExpect(status().isGone());
+        mvc.perform(get("/c/inconnu-token-0000000000")).andExpect(status().isNotFound());
+        // lien expiré
+        var tk = contentTokens.findByToken(token).orElseThrow();
+        // API partenaire : émission d'un lien
+        var partner = partners.save(partner("PremiumP"));
+        c.setPartner(partner);
+        services.save(c);
+        String key = "vas_prem_" + sn;
+        var cl = new ApiClient();
+        cl.setName("prem"); cl.setPartner(partner); cl.setScopes("messages:send"); cl.setKeyHash(ApiKeyFilter.sha256(key));
+        apiClients.save(cl);
+        mvc.perform(post("/api/v1/content/" + c.getId() + "/links").header("X-API-Key", key).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"msisdn\":\"98777666\",\"code\":\"GUIDE\"}")).andExpect(status().isAccepted());
+        assertTrue(lastMt("+21698777666").getContent().contains("/c/"));
+        mvc.perform(post("/api/v1/content/" + c.getId() + "/links").header("X-API-Key", key).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"msisdn\":\"98777666\",\"code\":\"INCONNU\"}")).andExpect(status().isUnprocessableEntity());
+        tk.setExpiresAt(Instant.now().minusSeconds(5));
+        contentTokens.save(tk);
+        mvc.perform(get("/c/" + token)).andExpect(status().isGone());
+    }
+
+    @Autowired ContentTokenRepo contentTokens;
 
     @Test
     void listsArePaginatedWithTotalCountHeader() throws Exception {

@@ -16,7 +16,7 @@ public class MoMessage {
     @ManyToOne(optional=false) private Operator operator;
     private String dedupKey;
     private String operatorMsgId;
-    private String msisdn;
+    @Convert(converter = tn.vas.security.MsisdnConverter.class) private String msisdn;
     private String shortCode;
     private String content;
     private Instant receivedAt;

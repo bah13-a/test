@@ -41,7 +41,7 @@ public class SecurityConfig {
             .addFilterAfter(new MfaFilter(props.mfaEnforced(), clock), BasicAuthenticationFilter.class)
             .addFilterBefore(new CallbackSecretFilter(props.callback().sharedSecret()), BasicAuthenticationFilter.class)
             .authorizeHttpRequests(a -> a
-                .requestMatchers("/auth/login", "/auth/env", "/dev/**", "/api/v1/health", "/actuator/health/**", "/actuator/health", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/", "/index.html", "/assets/**", "/favicon.svg").permitAll()
+                .requestMatchers("/auth/login", "/auth/env", "/dev/**", "/c/**", "/api/v1/health", "/actuator/health/**", "/actuator/health", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/", "/index.html", "/assets/**", "/favicon.svg").permitAll()
                 .requestMatchers("/callbacks/**").hasRole("GATEWAY")
                 .requestMatchers("/api/v1/**").authenticated()
                 .requestMatchers("/actuator/**").hasAnyRole("SUPER_ADMIN", "NOC")

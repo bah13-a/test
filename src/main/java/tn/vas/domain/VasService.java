@@ -30,4 +30,6 @@ public class VasService {
     private String replyLimit;
     private String replyClosed;
     private String defaultLang = "fr";
+    private Instant closedAt;
+    private int maxTps;
 }

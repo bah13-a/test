@@ -56,6 +56,8 @@ public final class Repos {
     public interface MtRepo extends JpaRepository<MtMessage, Long>, org.springframework.data.jpa.repository.JpaSpecificationExecutor<MtMessage> {
         Optional<MtMessage> findByCorrelationId(String id);
         long countByStatus(Enums.MtStatus status);
+        @Query("select m from MtMessage m where m.status = :s and m.scheduledAt is not null and m.scheduledAt <= :now")
+        List<MtMessage> findDueScheduled(@Param("s") Enums.MtStatus s, @Param("now") Instant now);
         Optional<MtMessage> findByApiClientIdAndClientRef(Long apiClientId, String clientRef);
         List<MtMessage> findTop100ByOrderByCreatedAtDesc();
         List<MtMessage> findTop100ByMsisdnOrderByCreatedAtDesc(String msisdn);
@@ -127,5 +129,42 @@ public final class Repos {
         long whitelistSize(@Param("s") VasService s);
         @Query("select count(r) > 0 from MsisdnRule r where r.ruleType = 'WHITE' and r.msisdn = :m and (r.service is null or r.service = :s)")
         boolean whitelisted(@Param("m") String msisdn, @Param("s") VasService s);
+    }
+
+    public interface QuizQuestionRepo extends JpaRepository<QuizQuestion, Long> {
+        List<QuizQuestion> findByServiceOrderByPositionAsc(VasService s);
+        Optional<QuizQuestion> findByServiceAndPosition(VasService s, int position);
+        long countByService(VasService s);
+    }
+
+    public interface QuizProgressRepo extends JpaRepository<QuizProgress, Long> {
+        Optional<QuizProgress> findByServiceAndMsisdn(VasService s, String msisdn);
+        @Query("select p from QuizProgress p where p.msisdn = :m and p.status = 'IN_PROGRESS' and p.service.shortCode = :sc")
+        List<QuizProgress> activeFor(@Param("m") String msisdn, @Param("sc") ShortCode sc);
+        List<QuizProgress> findTop50ByServiceAndStatusOrderByScoreDescCompletedAtAsc(VasService s, String status);
+        long countByServiceAndStatus(VasService s, String status);
+    }
+
+    public interface ContentItemRepo extends JpaRepository<ContentItem, Long> {
+        List<ContentItem> findByServiceOrderById(VasService s);
+        Optional<ContentItem> findByServiceAndCode(VasService s, String code);
+    }
+
+    public interface ContentTokenRepo extends JpaRepository<ContentToken, Long> {
+        Optional<ContentToken> findByToken(String token);
+        long countByItem_Service(VasService s);
+    }
+
+    public interface VoteOptionRepo extends JpaRepository<VoteOption, Long> {
+        List<VoteOption> findByServiceOrderById(VasService s);
+        Optional<VoteOption> findByServiceAndCodeIgnoreCase(VasService s, String code);
+    }
+
+    public interface VoteBallotRepo extends JpaRepository<VoteBallot, Long> {
+        long countByServiceAndMsisdn(VasService s, String msisdn);
+        @Query("select b.optionCode, count(b), count(distinct b.msisdn) from VoteBallot b where b.service = :s group by b.optionCode")
+        List<Object[]> tally(@Param("s") VasService s);
+        @Query("select count(distinct b.msisdn) from VoteBallot b where b.service = :s")
+        long distinctVoters(@Param("s") VasService s);
     }
 }

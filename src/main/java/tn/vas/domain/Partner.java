@@ -17,4 +17,5 @@ public class Partner {
     private BigDecimal sharePercent = BigDecimal.ZERO;
     private String webhookUrl;
     private String webhookSecret;
+    private int maxTps;
 }

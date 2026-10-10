@@ -330,6 +330,7 @@ public class AdminController {
     public Map<String, Object> setStatus(@PathVariable Long id, @PathVariable ServiceStatus status) {
         var s = services.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         s.setStatus(status); // effet immédiat, sans redéploiement
+        if (status == ServiceStatus.CLOSED && s.getClosedAt() == null) s.setClosedAt(clock.instant());
         audit.log("SERVICE_STATUS", "service:" + id, status.name());
         services.save(s);
         return Map.of("id", id, "status", status);

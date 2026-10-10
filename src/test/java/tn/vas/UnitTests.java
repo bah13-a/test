@@ -115,4 +115,12 @@ class UnitTests {
         for (int i = 0; i + 8 < stamps.size(); i++) assertTrue(stamps.get(i + 8) - stamps.get(i) >= 1_000_000_000L - 20_000_000L, "9 envois en moins d'une seconde");
         gate.acquire("k", 0); // 0 = illimité
     }
+
+    @Test
+    void quizAnswerNormalization() {
+        assertEquals(Engines.norm("Égypte !"), Engines.norm("egypte"));
+        assertEquals(Engines.norm("تُونْس"), Engines.norm("تونس"));
+        assertEquals(Engines.norm("أحمد"), Engines.norm("احمد"));
+        assertEquals("le caire", Engines.norm("  Le   CAIRE. "));
+    }
 }

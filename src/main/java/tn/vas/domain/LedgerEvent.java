@@ -18,7 +18,7 @@ public class LedgerEvent {
     @ManyToOne(optional=false) private Operator operator;
     @ManyToOne private VasService service;
     private String shortCode;
-    private String msisdn;
+    @Convert(converter = tn.vas.security.MsisdnConverter.class) private String msisdn;
     private BigDecimal grossAmount;
     private BigDecimal operatorShare;
     private BigDecimal providerShare;
