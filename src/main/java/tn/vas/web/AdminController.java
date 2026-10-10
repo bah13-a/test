@@ -49,12 +49,15 @@ public class AdminController {
     private final ReconciliationService reconService;
     private final SubscriptionService subscriptionService;
     private final Clock clock;
+    private final UrlGuard urlGuard;
+    private final org.springframework.security.crypto.password.PasswordEncoder enc;
 
     public AdminController(OperatorRepo operators, ShortCodeRepo shortCodes, PartnerRepo partners, ServiceRepo services,
                            KeywordRepo keywords, TariffRepo tariffs, LedgerRepo ledger, ReconRepo recon, MtRepo mts, MoRepo mos,
                            ConsentRepo consents, SubscriptionRepo subs, AuditRepo auditRepo, ApiClientRepo apiClients,
                            ReplyRepo replies, RuleRepo rules, UserRepo users, UserService userService, AuditService audit,
-                           ReconciliationService reconService, SubscriptionService subscriptionService, Clock clock) {
+                           ReconciliationService reconService, SubscriptionService subscriptionService, Clock clock, UrlGuard urlGuard, org.springframework.security.crypto.password.PasswordEncoder enc) {
+        this.urlGuard = urlGuard; this.enc = enc;
         this.operators = operators; this.shortCodes = shortCodes; this.partners = partners; this.services = services;
         this.keywords = keywords; this.tariffs = tariffs; this.ledger = ledger; this.recon = recon; this.mts = mts; this.mos = mos;
         this.consents = consents; this.subs = subs; this.auditRepo = auditRepo; this.apiClients = apiClients; this.replies = replies;
@@ -67,7 +70,34 @@ public class AdminController {
     public Map<String, Object> me(Authentication auth) {
         var u = users.findByUsername(auth.getName()).orElseThrow();
         return Map.of("username", u.getUsername(), "roles", Arrays.asList(u.getRoles().split(",")), "mfaEnabled", u.isMfaEnabled(),
-                "partnerId", u.getPartner() == null ? "" : u.getPartner().getId());
+                "partnerId", u.getPartner() == null ? "" : u.getPartner().getId(), "mustChangePassword", u.isMustChangePassword());
+    }
+
+    public record PasswordReq(String current, String newPassword) {}
+
+    /** Changement de son propre mot de passe : toutes les sessions existantes sont révoquées (la reconnexion est nécessaire). */
+    @PostMapping("/me/password")
+    public Map<String, Object> changePassword(Authentication auth, @RequestBody PasswordReq r) {
+        var u = users.findByUsername(auth.getName()).orElseThrow();
+        if (r.current() == null || !enc.matches(r.current(), u.getPasswordHash())) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "mot de passe actuel incorrect");
+        try { UserService.checkPassword(r.newPassword()); } catch (IllegalArgumentException e) { throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, e.getMessage()); }
+        if (enc.matches(r.newPassword(), u.getPasswordHash())) throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "le nouveau mot de passe doit différer de l'ancien");
+        u.setPasswordHash(enc.encode(r.newPassword()));
+        u.setMustChangePassword(false);
+        u.setTokenVersion(u.getTokenVersion() + 1);
+        users.save(u);
+        audit.log("PASSWORD_CHANGE", "user:" + u.getUsername(), null);
+        return Map.of("changed", true);
+    }
+
+    /** Déconnexion de toutes les sessions du compte (jetons émis avant ce moment invalidés). */
+    @PostMapping("/me/logout-all")
+    public Map<String, Object> logoutAll(Authentication auth) {
+        var u = users.findByUsername(auth.getName()).orElseThrow();
+        u.setTokenVersion(u.getTokenVersion() + 1);
+        users.save(u);
+        audit.log("LOGOUT_ALL", "user:" + u.getUsername(), null);
+        return Map.of("revoked", true);
     }
 
     @PostMapping("/me/mfa/setup")
@@ -104,6 +134,8 @@ public class AdminController {
     public Map<String, Object> createUser(@RequestBody UserReq r) {
         try {
             var u = userService.create(r.username(), r.password(), r.roles(), r.partnerId() == null ? null : partners.findById(r.partnerId()).orElseThrow());
+            u.setMustChangePassword(true); // mot de passe initial connu de l'administrateur : à changer à la première connexion
+            users.save(u);
             audit.log("USER_CREATE", "user:" + r.username(), String.join(",", r.roles()));
             return Map.of("id", u.getId());
         } catch (IllegalArgumentException e) {
@@ -113,15 +145,18 @@ public class AdminController {
 
     @PatchMapping("/users/{id}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public Map<String, Object> patchUser(@PathVariable Long id, @RequestBody UserPatch p, org.springframework.security.crypto.password.PasswordEncoder enc) {
+    public Map<String, Object> patchUser(@PathVariable Long id, @RequestBody UserPatch p) {
         var u = users.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        boolean revoke = p.roles() != null || Boolean.FALSE.equals(p.active()) || Boolean.TRUE.equals(p.resetMfa()) || p.password() != null;
         if (p.roles() != null) { for (String r : p.roles()) if (!UserService.ROLES.contains(r)) throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "rôle " + r); u.setRoles(String.join(",", p.roles())); }
         if (p.active() != null) u.setActive(p.active());
         if (Boolean.TRUE.equals(p.resetMfa())) { u.setMfaEnabled(false); u.setTotpSecret(null); }
         if (p.password() != null) {
             try { UserService.checkPassword(p.password()); } catch (IllegalArgumentException e) { throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, e.getMessage()); }
             u.setPasswordHash(enc.encode(p.password()));
+            u.setMustChangePassword(true);
         }
+        if (revoke) u.setTokenVersion(u.getTokenVersion() + 1); // rôles, désactivation, reset MFA ou mot de passe : sessions révoquées
         users.save(u);
         audit.log("USER_UPDATE", "user:" + u.getUsername(), "roles=" + u.getRoles() + " active=" + u.isActive());
         return Map.of("id", u.getId());
@@ -198,19 +233,26 @@ public class AdminController {
     }
 
     // ---------------------------------------------------------------- Partenaires, clients API
-    public record PartnerReq(String name, BigDecimal sharePercent, String webhookUrl, String webhookSecret) {}
+    public record PartnerReq(String name, BigDecimal sharePercent, String webhookUrl, String webhookSecret, Integer maxTps) {}
+
+    private void checkWebhook(String url) {
+        if (url == null || url.isBlank()) return;
+        try { urlGuard.check(url); } catch (IllegalArgumentException e) { throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, e.getMessage()); }
+    }
 
     @GetMapping("/partners")
     @PreAuthorize(ANY)
     public ResponseEntity<List<Map<String, Object>>> partners(@RequestParam(required = false) Integer page, @RequestParam(required = false) Integer size) {
         return Paging.slice(partners.findAll().stream().map(p -> Map.<String, Object>of("id", p.getId(), "name", p.getName(), "sharePercent", p.getSharePercent(),
-                "webhookUrl", p.getWebhookUrl() == null ? "" : p.getWebhookUrl())).toList(), page, size); // le secret webhook n'est jamais renvoyé
+                "webhookUrl", p.getWebhookUrl() == null ? "" : p.getWebhookUrl(), "maxTps", p.getMaxTps())).toList(), page, size); // le secret webhook n'est jamais renvoyé
     }
 
     @PostMapping("/partners")
     @PreAuthorize(MGR)
     public Map<String, Object> createPartner(@RequestBody PartnerReq r) {
+        checkWebhook(r.webhookUrl());
         var p = new Partner();
+        if (r.maxTps() != null) p.setMaxTps(r.maxTps());
         p.setName(r.name());
         p.setSharePercent(r.sharePercent() == null ? BigDecimal.ZERO : r.sharePercent());
         p.setWebhookUrl(r.webhookUrl());
@@ -225,7 +267,8 @@ public class AdminController {
         var p = partners.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         if (r.name() != null) p.setName(r.name());
         if (r.sharePercent() != null) p.setSharePercent(r.sharePercent());
-        if (r.webhookUrl() != null) p.setWebhookUrl(r.webhookUrl());
+        if (r.maxTps() != null) p.setMaxTps(Math.max(0, r.maxTps()));
+        if (r.webhookUrl() != null) { checkWebhook(r.webhookUrl()); p.setWebhookUrl(r.webhookUrl()); }
         if (r.webhookSecret() != null) p.setWebhookSecret(r.webhookSecret());
         audit.log("PARTNER_UPDATE", "partner:" + id, "share=" + p.getSharePercent());
         partners.save(p);
@@ -272,7 +315,7 @@ public class AdminController {
     // ---------------------------------------------------------------- Services, mots-clés, réponses, règles
     public record ServiceReq(String name, ServiceType type, Long partnerId, Long shortCodeId, Boolean regulated, ConsentMode consentMode,
                              Instant opensAt, Instant closesAt, Integer maxActionsPerMsisdn, String defaultLang,
-                             String replyOk, String replyStop, String replyHelp, String replyLimit, String replyClosed) {}
+                             String replyOk, String replyStop, String replyHelp, String replyLimit, String replyClosed, Integer maxTps) {}
 
     @GetMapping("/services")
     @PreAuthorize(ANY)
@@ -284,7 +327,7 @@ public class AdminController {
             m.put("partner", s.getPartner() == null ? null : s.getPartner().getName()); m.put("regulated", s.isRegulated());
             m.put("regulatoryApproved", s.isRegulatoryApproved()); m.put("consentMode", s.getConsentMode());
             m.put("opensAt", s.getOpensAt()); m.put("closesAt", s.getClosesAt()); m.put("maxActionsPerMsisdn", s.getMaxActionsPerMsisdn());
-            m.put("defaultLang", s.getDefaultLang());
+            m.put("defaultLang", s.getDefaultLang()); m.put("maxTps", s.getMaxTps());
             return m;
         }).toList(), page, size);
     }
@@ -318,6 +361,7 @@ public class AdminController {
         if (r.closesAt() != null) s.setClosesAt(r.closesAt());
         if (r.maxActionsPerMsisdn() != null) s.setMaxActionsPerMsisdn(r.maxActionsPerMsisdn());
         if (r.defaultLang() != null) s.setDefaultLang(r.defaultLang());
+        if (r.maxTps() != null) s.setMaxTps(Math.max(0, r.maxTps()));
         if (r.replyOk() != null) s.setReplyOk(r.replyOk());
         if (r.replyStop() != null) s.setReplyStop(r.replyStop());
         if (r.replyHelp() != null) s.setReplyHelp(r.replyHelp());

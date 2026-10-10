@@ -33,7 +33,7 @@ public class SecurityConfig {
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .httpBasic(b -> b.authenticationEntryPoint((req, res, ex) -> res.sendError(401, "unauthorized"))) // sans WWW-Authenticate : pas de boîte de dialogue navigateur
             .addFilterBefore(new BearerFilter(tokens, userService), BasicAuthenticationFilter.class)
-            .addFilterBefore(new ApiKeyFilter(clients, limiter), BasicAuthenticationFilter.class)
+            .addFilterBefore(new ApiKeyFilter(clients, limiter, tokens), BasicAuthenticationFilter.class)
             .exceptionHandling(e -> e.accessDeniedHandler((req, res, ex) -> {
                 audit.log("ACCESS_DENIED", req.getMethod() + " " + req.getRequestURI(), null); // tentative d'accès refusée tracée (Annexe A14)
                 res.sendError(403, "forbidden");
@@ -41,7 +41,7 @@ public class SecurityConfig {
             .addFilterAfter(new MfaFilter(props.mfaEnforced(), clock), BasicAuthenticationFilter.class)
             .addFilterBefore(new CallbackSecretFilter(props.callback().sharedSecret()), BasicAuthenticationFilter.class)
             .authorizeHttpRequests(a -> a
-                .requestMatchers("/auth/login", "/auth/env", "/dev/**", "/c/**", "/api/v1/health", "/actuator/health/**", "/actuator/health", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/", "/index.html", "/assets/**", "/favicon.svg").permitAll()
+                .requestMatchers("/auth/login", "/auth/env", "/oauth/token", "/dev/**", "/c/**", "/api/v1/health", "/actuator/health/**", "/actuator/health", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/", "/index.html", "/assets/**", "/favicon.svg").permitAll()
                 .requestMatchers("/callbacks/**").hasRole("GATEWAY")
                 .requestMatchers("/api/v1/**").authenticated()
                 .requestMatchers("/actuator/**").hasAnyRole("SUPER_ADMIN", "NOC")

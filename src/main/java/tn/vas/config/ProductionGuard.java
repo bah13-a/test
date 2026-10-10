@@ -19,7 +19,8 @@ public class ProductionGuard {
     private static final Logger log = LoggerFactory.getLogger(ProductionGuard.class);
 
     public ProductionGuard(VasProperties p, Environment env) {
-        List<String> errors = validate(p, env.getProperty("spring.datasource.url", ""));
+        List<String> errors = new ArrayList<>(validate(p, env.getProperty("spring.datasource.url", "")));
+        if (weak(env.getProperty("vas.data-key"), 32)) errors.add("DATA_KEY : 32 caractères minimum, sans valeur d'exemple (chiffrement des numéros ; à sauvegarder hors serveur)");
         validateWarnings(p).forEach(w -> log.warn("[pro] {}", w));
         if (!errors.isEmpty()) {
             throw new IllegalStateException("Configuration 'pro' invalide :\n - " + String.join("\n - ", errors));

@@ -31,8 +31,10 @@ public class WebhookService {
     private final RestClient http;
     private final ObjectMapper json;
     private final Clock clock;
+    private final tn.vas.security.UrlGuard urlGuard;
 
-    public WebhookService(WebhookRepo outbox, ApiClientRepo clients, RestClient http, ObjectMapper json, Clock clock) {
+    public WebhookService(WebhookRepo outbox, ApiClientRepo clients, RestClient http, ObjectMapper json, Clock clock, tn.vas.security.UrlGuard urlGuard) {
+        this.urlGuard = urlGuard;
         this.outbox = outbox;
         this.clients = clients;
         this.http = http;
@@ -102,6 +104,7 @@ public class WebhookService {
         for (var o : outbox.findByStatusAndNextAttemptAtBefore("PENDING", clock.instant())) {
             long ts = clock.instant().getEpochSecond();
             try {
+                urlGuard.check(o.getUrl()); // re-contrôle à l'envoi (DNS peut avoir changé) ; POST ne suit pas les redirections
                 http.post().uri(o.getUrl()).header("Content-Type", "application/json")
                         .header("X-VAS-Event-Id", o.getEventId()).header("X-VAS-Timestamp", Long.toString(ts))
                         .header("X-VAS-Signature", sign(o.getSecret(), ts + "." + o.getPayload()))

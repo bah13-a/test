@@ -20,6 +20,7 @@ vas:
   queue: memory
   queue-async: true            # envoi MT asynchrone comme en production
   rate-limit: memory
+  webhook: { allow-http: true, allow-private: true }   # dev/test : webhooks locaux autorisés
   mfa-enforced: false          # MFA possible mais non imposé en démonstration
   public-base-url: http://localhost:8080
   data-key: dev-data-key-0123456789abcdef0123456789abcdef

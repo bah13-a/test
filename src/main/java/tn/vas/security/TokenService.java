@@ -23,7 +23,9 @@ public class TokenService {
     private final byte[] secret;
     private final Clock clock;
 
-    public record Parsed(String username, boolean mfa) {}
+    public record Parsed(String username, boolean mfa, int version) {}
+    public record ApiParsed(long clientId) {}
+    public static final long API_TTL_SECONDS = 3600;
 
     public TokenService(VasProperties props, Clock clock) {
         this.clock = clock;
@@ -39,7 +41,12 @@ public class TokenService {
     }
 
     public String issue(String username, boolean mfa) {
-        String body = username + "|" + (clock.instant().getEpochSecond() + TTL_SECONDS) + "|" + (mfa ? 1 : 0);
+        return issue(username, mfa, 0);
+    }
+
+    /** version = AppUser.tokenVersion : incrémentée pour révoquer d'un coup toutes les sessions du compte. */
+    public String issue(String username, boolean mfa, int version) {
+        String body = username + "|" + (clock.instant().getEpochSecond() + TTL_SECONDS) + "|" + (mfa ? 1 : 0) + "|" + version;
         String b = Base64.getUrlEncoder().withoutPadding().encodeToString(body.getBytes(StandardCharsets.UTF_8));
         return b + "." + sign(b);
     }
@@ -51,8 +58,28 @@ public class TokenService {
             String b = token.substring(0, dot);
             if (!MessageDigest.isEqual(sign(b).getBytes(StandardCharsets.UTF_8), token.substring(dot + 1).getBytes(StandardCharsets.UTF_8))) return null;
             String[] p = new String(Base64.getUrlDecoder().decode(b), StandardCharsets.UTF_8).split("\\|");
-            if (p.length != 3 || Long.parseLong(p[1]) < clock.instant().getEpochSecond()) return null;
-            return new Parsed(p[0], "1".equals(p[2]));
+            if (p.length != 4 || Long.parseLong(p[1]) < clock.instant().getEpochSecond()) return null;
+            return new Parsed(p[0], "1".equals(p[2]), Integer.parseInt(p[3]));
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    /** Jeton OAuth2 API (client_credentials) : "api|clientId|exp", signé sous un contexte distinct de celui des sessions admin. */
+    public String issueApi(long clientId) {
+        String b = Base64.getUrlEncoder().withoutPadding().encodeToString(("api|" + clientId + "|" + (clock.instant().getEpochSecond() + API_TTL_SECONDS)).getBytes(StandardCharsets.UTF_8));
+        return b + "." + sign("api:" + b);
+    }
+
+    public ApiParsed parseApi(String token) {
+        try {
+            int dot = token.indexOf('.');
+            if (dot < 1) return null;
+            String b = token.substring(0, dot);
+            if (!MessageDigest.isEqual(sign("api:" + b).getBytes(StandardCharsets.UTF_8), token.substring(dot + 1).getBytes(StandardCharsets.UTF_8))) return null;
+            String[] p = new String(Base64.getUrlDecoder().decode(b), StandardCharsets.UTF_8).split("\\|");
+            if (p.length != 3 || !p[0].equals("api") || Long.parseLong(p[2]) < clock.instant().getEpochSecond()) return null;
+            return new ApiParsed(Long.parseLong(p[1]));
         } catch (RuntimeException e) {
             return null;
         }

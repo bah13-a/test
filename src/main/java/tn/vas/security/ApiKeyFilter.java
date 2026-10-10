@@ -22,8 +22,10 @@ public class ApiKeyFilter extends OncePerRequestFilter {
     private static final Logger log = LoggerFactory.getLogger("api.access");
     private final ApiClientRepo clients;
     private final RateLimiter limiter;
+    private final TokenService tokens;
 
-    public ApiKeyFilter(ApiClientRepo clients, RateLimiter limiter) {
+    public ApiKeyFilter(ApiClientRepo clients, RateLimiter limiter, TokenService tokens) {
+        this.tokens = tokens;
         this.clients = clients;
         this.limiter = limiter;
     }
@@ -39,6 +41,11 @@ public class ApiKeyFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         String key = req.getHeader("X-API-Key");
         var client = key == null ? null : clients.findByKeyHashAndActiveTrue(sha256(key)).orElse(null);
+        String authz = req.getHeader("Authorization");
+        if (client == null && key == null && authz != null && authz.startsWith("Bearer ")) { // OAuth2 client_credentials (POST /oauth/token)
+            var t = tokens.parseApi(authz.substring(7).trim());
+            if (t != null) client = clients.findById(t.clientId()).filter(c -> c.isActive()).orElse(null);
+        }
         if (client == null) {
             log.warn("api 401 {} {}", req.getMethod(), req.getRequestURI());
             res.sendError(401, "invalid api key");

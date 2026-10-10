@@ -66,7 +66,7 @@ public class AuthController {
         u.setLockedUntil(null);
         users.save(u);
         audit.log("LOGIN", "user:" + u.getUsername(), u.isMfaEnabled() ? "mfa" : "password");
-        return ResponseEntity.ok(Map.of("token", tokens.issue(u.getUsername(), u.isMfaEnabled()), "expiresInSeconds", TokenService.TTL_SECONDS,
+        return ResponseEntity.ok(Map.of("token", tokens.issue(u.getUsername(), u.isMfaEnabled(), u.getTokenVersion()), "mustChangePassword", u.isMustChangePassword(), "expiresInSeconds", TokenService.TTL_SECONDS,
                 "username", u.getUsername(), "roles", Arrays.asList(u.getRoles().split(",")), "mfaEnabled", u.isMfaEnabled()));
     }
 

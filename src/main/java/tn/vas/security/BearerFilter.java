@@ -28,7 +28,7 @@ public class BearerFilter extends OncePerRequestFilter {
             if (parsed != null) {
                 try {
                     var d = (AppUserDetails) users.loadUserByUsername(parsed.username());
-                    if (d.isEnabled() && d.isAccountNonLocked()) {
+                    if (d.isEnabled() && d.isAccountNonLocked() && d.user().getTokenVersion() == parsed.version()) { // version différente = sessions révoquées
                         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(d, null, d.getAuthorities()));
                         req.setAttribute(MFA_ATTR, parsed.mfa());
                     }

@@ -94,6 +94,31 @@ public final class Repos {
         @Query("select e.billingStatus, sum(e.grossAmount), sum(e.partnerShare), sum(e.providerShare), count(e) from LedgerEvent e "
                 + "where e.createdAt >= :from group by e.billingStatus")
         List<Object[]> totalsSince(@Param("from") Instant from);
+        @Query("select count(e) from LedgerEvent e where e.createdAt >= :from and e.createdAt < :to and e.billingStatus in :sts")
+        long countInPeriod(@Param("from") Instant from, @Param("to") Instant to, @Param("sts") List<Enums.BillingStatus> sts);
+        @Query("select count(e), coalesce(sum(e.grossAmount),0), coalesce(sum(e.operatorShare),0), coalesce(sum(e.partnerShare),0), coalesce(sum(e.providerShare),0), coalesce(sum(e.taxes),0) "
+                + "from LedgerEvent e where e.createdAt >= :from and e.createdAt < :to and e.billingStatus = 'CHARGED'")
+        List<Object[]> chargedTotals(@Param("from") Instant from, @Param("to") Instant to);
+        @Query("select e.service, e.billingStatus, count(e), coalesce(sum(e.grossAmount),0), coalesce(sum(e.partnerShare),0) from LedgerEvent e "
+                + "where e.service in :svcs and e.createdAt >= :from and e.createdAt < :to group by e.service, e.billingStatus")
+        List<Object[]> statement(@Param("svcs") List<VasService> svcs, @Param("from") Instant from, @Param("to") Instant to);
+        @Query("select count(e) from LedgerEvent e where e.service in :svcs and e.createdAt >= :from and e.createdAt < :to and e.billingStatus in :sts")
+        long countForServices(@Param("svcs") List<VasService> svcs, @Param("from") Instant from, @Param("to") Instant to, @Param("sts") List<Enums.BillingStatus> sts);
+    }
+
+    public interface BillingPeriodRepo extends JpaRepository<BillingPeriod, Long> {
+        @Query("select count(p) > 0 from BillingPeriod p where p.fromAt <= :at and p.toAt > :at")
+        boolean closedAt(@Param("at") Instant at);
+        @Query("select count(p) > 0 from BillingPeriod p where p.fromAt < :to and p.toAt > :from")
+        boolean overlaps(@Param("from") Instant from, @Param("to") Instant to);
+        List<BillingPeriod> findAllByOrderByFromAtDesc();
+    }
+
+    public interface PayoutRepo extends JpaRepository<PartnerPayout, Long> {
+        @Query("select count(p) > 0 from PartnerPayout p where p.partner = :pa and p.status <> 'CANCELLED' and p.fromAt < :to and p.toAt > :from")
+        boolean overlaps(@Param("pa") Partner pa, @Param("from") Instant from, @Param("to") Instant to);
+        List<PartnerPayout> findByPartnerOrderByFromAtDesc(Partner p);
+        List<PartnerPayout> findAllByOrderByIdDesc();
     }
 
     public interface ReconRepo extends JpaRepository<ReconItem, Long> {

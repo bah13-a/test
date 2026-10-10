@@ -15,8 +15,10 @@ public class LedgerService {
     private final LedgerRepo ledger;
     private final TariffRepo tariffs;
     private final Clock clock;
+    private final BillingPeriodRepo periods;
 
-    public LedgerService(LedgerRepo ledger, TariffRepo tariffs, Clock clock) {
+    public LedgerService(LedgerRepo ledger, TariffRepo tariffs, Clock clock, BillingPeriodRepo periods) {
+        this.periods = periods;
         this.ledger = ledger;
         this.tariffs = tariffs;
         this.clock = clock;
@@ -56,6 +58,10 @@ public class LedgerService {
     @Transactional
     public void transition(String eventId, BillingStatus to) {
         ledger.findByEventId(eventId).ifPresent(e -> {
+            if (periods.closedAt(e.getCreatedAt())) { // période clôturée : écritures figées, corriger par ajustement
+                org.slf4j.LoggerFactory.getLogger(LedgerService.class).warn("transition {} -> {} refusée : période clôturée", eventId, to);
+                return;
+            }
             BillingStatus from = e.getBillingStatus();
             boolean allowed = switch (from) {
                 case PENDING, ACCEPTED -> to != BillingStatus.PENDING;

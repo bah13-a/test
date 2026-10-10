@@ -17,6 +17,7 @@ management:
 vas:
   queue: memory
   rate-limit: memory
+  webhook: { allow-http: true, allow-private: true }   # dev/test : webhooks locaux autorisés
   public-base-url: http://localhost
   mo-dedup-seconds: 30
   data-key: test-data-key-0123456789abcdef0123456789abcdef

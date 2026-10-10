@@ -24,6 +24,11 @@ public class MfaFilter extends OncePerRequestFilter {
         this.clock = clock;
     }
 
+    /** /admin/me et /admin/me/** uniquement (« /admin/messages » commence aussi par « /admin/me »). */
+    static boolean isSelfService(String uri) {
+        return uri.equals("/admin/me") || uri.startsWith("/admin/me/");
+    }
+
     @Override
     protected boolean shouldNotFilter(HttpServletRequest req) {
         String p = req.getRequestURI();
@@ -36,6 +41,11 @@ public class MfaFilter extends OncePerRequestFilter {
         Authentication a = SecurityContextHolder.getContext().getAuthentication();
         if (a != null && a.getPrincipal() instanceof AppUserDetails d) {
             var u = d.user();
+            if (u.isMustChangePassword() && !isSelfService(req.getRequestURI())) { // mot de passe à changer avant tout autre accès
+                res.setHeader("X-Password-Change-Required", "true");
+                res.sendError(403, "password_change_required");
+                return;
+            }
             boolean bearer = req.getAttribute(BearerFilter.MFA_ATTR) != null;
             boolean bearerMfa = Boolean.TRUE.equals(req.getAttribute(BearerFilter.MFA_ATTR));
             if (u.isMfaEnabled() && bearer && bearerMfa) {
@@ -47,7 +57,7 @@ public class MfaFilter extends OncePerRequestFilter {
                     return;
                 }
             } else if (enforce && a.getAuthorities().stream().anyMatch(g -> SENSITIVE.contains(g.getAuthority()))
-                    && !req.getRequestURI().startsWith("/admin/me")) {
+                    && !isSelfService(req.getRequestURI())) {
                 res.setHeader("X-MFA-Enrollment", "true");
                 res.sendError(403, "activation du MFA obligatoire pour ce rôle");
                 return;

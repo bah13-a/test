@@ -50,7 +50,7 @@ public class ApiController {
     }
 
     public record SendRequest(@NotBlank String to, @NotBlank String text, String sender, Long serviceId, String operator,
-                              Priority priority, String clientRef) {}
+                              Priority priority, String clientRef, java.time.Instant scheduleAt) {}
     public record MessageView(String id, String clientRef, String to, String status, String rawStatus, int segments,
                               String encoding, List<Map<String, Object>> history) {}
     public record SubRequest(@NotBlank String msisdn, @NotNull Long serviceId, @NotBlank String consentProof) {}
@@ -77,9 +77,11 @@ public class ApiController {
         String sender = svc != null ? svc.getShortCode().getNumber() : r.sender();
         if (sender == null || sender.isBlank()) throw bad("sender requis");
         if (svc != null && svc.getStatus() != ServiceStatus.ACTIVE) throw new ResponseStatusException(HttpStatus.CONFLICT, "service inactif");
+        if (r.scheduleAt() != null && (r.scheduleAt().isBefore(java.time.Instant.now().minusSeconds(60)) || r.scheduleAt().isAfter(java.time.Instant.now().plus(Duration.ofDays(30)))))
+            throw bad("scheduleAt doit être dans les 30 prochains jours");
         var m = mtService.submit(new MtService.Request(op, svc, msisdn, sender, r.text(),
                 r.priority() == null ? Priority.TRANSACTIONAL : r.priority(), r.clientRef(),
-                svc == null ? null : EventType.MT, null, client.getId(), Duration.ofHours(24)));
+                svc == null ? null : EventType.MT, null, client.getId(), Duration.ofHours(24), null, r.scheduleAt()));
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(view(m));
     }
 

@@ -44,10 +44,19 @@ public class RetentionJob {
             out.put("mo_message", jdbc.update("delete from mo_message where received_at < ?", cut));
         }
         if (r.consentDays() > 0) out.put("consent_record", jdbc.update("delete from consent_record where at < ?", cutoff(r.consentDays())));
-        if (r.auditDays() > 0) out.put("audit_log", jdbc.update("delete from audit_log where at < ?", cutoff(r.auditDays())));
+        if (r.auditDays() > 0) {
+            allowAuditPurge();
+            out.put("audit_log", jdbc.update("delete from audit_log where at < ?", cutoff(r.auditDays())));
+        }
         if (r.webhookDays() > 0) out.put("webhook_outbox", jdbc.update("delete from webhook_outbox where status in ('SENT','DEAD') and next_attempt_at < ?", cutoff(r.webhookDays())));
         if (out.values().stream().anyMatch(n -> n > 0)) log.info("purge de conservation : {}", out);
         return out;
+    }
+
+    /** Sur PostgreSQL, le journal d'audit est protégé par un trigger (V10) : la purge de conservation l'autorise le temps de la transaction. */
+    private void allowAuditPurge() {
+        String product = jdbc.execute((org.springframework.jdbc.core.ConnectionCallback<String>) c -> c.getMetaData().getDatabaseProductName());
+        if (product != null && product.toLowerCase().contains("postgres")) jdbc.queryForObject("select set_config('vas.audit_purge', 'on', true)", String.class);
     }
 
     private Timestamp cutoff(int days) {
