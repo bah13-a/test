@@ -36,11 +36,13 @@ public class MoService {
     private final QuizService quiz;
     private final ContentService content;
     private final RenewalOutcome renewals;
+    private final org.springframework.context.ApplicationEventPublisher events;
 
     public MoService(OperatorRepo operators, ShortCodeRepo shortCodes, KeywordRepo keywords, MoRepo mos,
                      SubscriptionRepo subs, ConsentRepo consents, MtService mt, AuditService audit,
-                     VasProperties props, Clock clock, io.micrometer.core.instrument.MeterRegistry metrics,
+                     VasProperties props, Clock clock, io.micrometer.core.instrument.MeterRegistry metrics, org.springframework.context.ApplicationEventPublisher events,
                      ReplyRepo replies, WebhookService webhooks, RuleRepo rules, VoteService vote, QuizService quiz, ContentService content, RenewalOutcome renewals) {
+        this.events = events;
         this.renewals = renewals;
         this.rules = rules;
         this.vote = vote;
@@ -108,6 +110,7 @@ public class MoService {
         }
         mo.setOutcome(outcome);
         mos.save(mo);
+        events.publishEvent(new tn.vas.event.DomainEvents.MoRecorded(mo.getReceivedAt(), op.getId(), mo.getService() == null ? null : mo.getService().getId(), outcome.name()));
         return count(outcome);
     }
 
@@ -129,12 +132,12 @@ public class MoService {
             return MoOutcome.SERVICE_CLOSED;
         }
         if (svc.isRegulated() && !svc.isRegulatoryApproved()) {
-            audit.log("MO_BLOCKED_REGULATORY", "service:" + svc.getId(), tn.vas.web.AdminController.mask(mo.getMsisdn()));
+            audit.log("MO_BLOCKED_REGULATORY", "service:" + svc.getId(), tn.vas.support.Views.mask(mo.getMsisdn()));
             return MoOutcome.BLOCKED;
         }
         if (rules.blacklisted(mo.getMsisdn(), svc)
                 || (rules.whitelistSize(svc) > 0 && !rules.whitelisted(mo.getMsisdn(), svc))) {
-            audit.log("MO_BLOCKED_RULE", "service:" + svc.getId(), tn.vas.web.AdminController.mask(mo.getMsisdn()));
+            audit.log("MO_BLOCKED_RULE", "service:" + svc.getId(), tn.vas.support.Views.mask(mo.getMsisdn()));
             return MoOutcome.BLOCKED;
         }
         if (svc.getMaxActionsPerMsisdn() > 0 && mos.countByServiceAndMsisdnAndOutcome(svc, mo.getMsisdn(), MoOutcome.ROUTED)

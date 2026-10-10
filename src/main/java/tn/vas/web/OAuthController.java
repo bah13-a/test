@@ -22,20 +22,25 @@ public class OAuthController {
     private final TokenService tokens;
     private final RateLimiter limiter;
     private final AuditService audit;
+    private final tn.vas.security.AuthThrottle throttle;
 
-    public OAuthController(ApiClientRepo clients, TokenService tokens, RateLimiter limiter, AuditService audit) {
+    public OAuthController(ApiClientRepo clients, TokenService tokens, RateLimiter limiter, AuditService audit, tn.vas.security.AuthThrottle throttle) {
+        this.throttle = throttle;
         this.clients = clients; this.tokens = tokens; this.limiter = limiter; this.audit = audit;
     }
 
     @PostMapping(value = "/token", consumes = "application/x-www-form-urlencoded")
-    public ResponseEntity<Map<String, Object>> token(@RequestParam("grant_type") String grantType, @RequestParam("client_id") String clientId,
+    public ResponseEntity<Map<String, Object>> token(jakarta.servlet.http.HttpServletRequest req, @RequestParam("grant_type") String grantType, @RequestParam("client_id") String clientId,
                                                      @RequestParam("client_secret") String secret) {
         if (!"client_credentials".equals(grantType)) return error(HttpStatus.BAD_REQUEST, "unsupported_grant_type");
+        String src = tn.vas.security.AuthThrottle.source(req);
+        if (throttle.blocked(src)) return error(HttpStatus.TOO_MANY_REQUESTS, "rate_limited");
         if (!limiter.allow("oauth:" + clientId, 30)) return error(HttpStatus.TOO_MANY_REQUESTS, "rate_limited");
         Long id = null;
         if (clientId.startsWith("client-")) try { id = Long.parseLong(clientId.substring(7)); } catch (NumberFormatException ignored) { /* invalid_client */ }
         var c = id == null ? null : clients.findByKeyHashAndActiveTrue(ApiKeyFilter.sha256(secret)).orElse(null);
         if (c == null || !c.getId().equals(id)) {
+            throttle.fail(src);
             audit.log("OAUTH_DENIED", clientId, null);
             return error(HttpStatus.UNAUTHORIZED, "invalid_client");
         }

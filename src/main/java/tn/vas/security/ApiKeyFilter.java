@@ -23,9 +23,11 @@ public class ApiKeyFilter extends OncePerRequestFilter {
     private final ApiClientRepo clients;
     private final RateLimiter limiter;
     private final TokenService tokens;
+    private final AuthThrottle throttle;
 
-    public ApiKeyFilter(ApiClientRepo clients, RateLimiter limiter, TokenService tokens) {
+    public ApiKeyFilter(ApiClientRepo clients, RateLimiter limiter, TokenService tokens, AuthThrottle throttle) {
         this.tokens = tokens;
+        this.throttle = throttle;
         this.clients = clients;
         this.limiter = limiter;
     }
@@ -39,6 +41,13 @@ public class ApiKeyFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
             throws ServletException, IOException {
+        String src = AuthThrottle.source(req);
+        if (throttle.blocked(src)) { // trop d'échecs récents depuis cette source
+            log.warn("api 429 (trop d'échecs d'authentification) source={}", src);
+            res.setHeader("Retry-After", "60");
+            res.sendError(429, "too many authentication failures");
+            return;
+        }
         String key = req.getHeader("X-API-Key");
         var client = key == null ? null : clients.findByKeyHashAndActiveTrue(sha256(key)).orElse(null);
         String authz = req.getHeader("Authorization");
@@ -47,6 +56,7 @@ public class ApiKeyFilter extends OncePerRequestFilter {
             if (t != null) client = clients.findById(t.clientId()).filter(c -> c.isActive()).orElse(null);
         }
         if (client == null) {
+            throttle.fail(src);
             log.warn("api 401 {} {}", req.getMethod(), req.getRequestURI());
             res.sendError(401, "invalid api key");
             return;

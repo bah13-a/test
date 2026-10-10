@@ -43,13 +43,35 @@ public class UrlGuard {
         if (!allowedHosts.isEmpty() && !allowedHosts.contains(host.toLowerCase()))
             throw new IllegalArgumentException("URL webhook : hôte non autorisé (" + host + ")");
         if (allowPrivate) return;
+        try {
+            resolvePublic(host);
+        } catch (java.net.UnknownHostException e) {
+            throw new IllegalArgumentException(e.getMessage());
+        }
+    }
+
+    /**
+     * Résout un nom en n'acceptant QUE des adresses publiques. Utilisée à la connexion (voir {@link #dnsResolver()}) : la résolution qui
+     * est contrôlée est celle qui sert à ouvrir la socket, ce qui supprime la fenêtre de « DNS rebinding » entre contrôle et connexion.
+     */
+    public InetAddress[] resolvePublic(String host) throws java.net.UnknownHostException {
         InetAddress[] addrs;
         try {
             addrs = InetAddress.getAllByName(host);
         } catch (java.net.UnknownHostException e) {
-            throw new IllegalArgumentException("URL webhook : hôte introuvable (" + host + ")");
+            throw new java.net.UnknownHostException("URL webhook : hôte introuvable (" + host + ")");
         }
-        for (InetAddress a : addrs) if (isPrivate(a)) throw new IllegalArgumentException("URL webhook : adresse non publique refusée (" + host + ")");
+        if (allowPrivate) return addrs;
+        for (InetAddress a : addrs) if (isPrivate(a)) throw new java.net.UnknownHostException("URL webhook : adresse non publique refusée (" + host + ")");
+        return addrs;
+    }
+
+    /** Résolveur DNS pour le client HTTP des webhooks : toute connexion vers une adresse non publique échoue. */
+    public org.apache.hc.client5.http.DnsResolver dnsResolver() {
+        return new org.apache.hc.client5.http.DnsResolver() {
+            @Override public InetAddress[] resolve(String host) throws java.net.UnknownHostException { return resolvePublic(host); }
+            @Override public String resolveCanonicalHostname(String host) throws java.net.UnknownHostException { return host; }
+        };
     }
 
     static boolean isPrivate(InetAddress a) {

@@ -84,6 +84,63 @@ public class MsisdnCrypto {
         return m.doFinal(plain.getBytes(StandardCharsets.UTF_8));
     }
 
+    /**
+     * Jeu de clés dérivé d'une clé de données : sert à l'outil de rotation (lecture avec l'ancienne clé, écriture avec la nouvelle)
+     * sans toucher à la configuration statique de l'application.
+     */
+    public static final class Keyset {
+        private final SecretKeySpec enc, mac;
+
+        public Keyset(String dataKey) {
+            try {
+                MessageDigest sha = MessageDigest.getInstance("SHA-256");
+                this.enc = new SecretKeySpec(sha.digest(("enc|" + dataKey).getBytes(StandardCharsets.UTF_8)), "AES");
+                this.mac = new SecretKeySpec(sha.digest(("mac|" + dataKey).getBytes(StandardCharsets.UTF_8)), "HmacSHA256");
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        }
+
+        public String encrypt(String plain) {
+            try {
+                byte[] iv = Arrays.copyOf(hmac(mac, plain), 16);
+                Cipher c = Cipher.getInstance("AES/CTR/NoPadding");
+                c.init(Cipher.ENCRYPT_MODE, enc, new IvParameterSpec(iv));
+                byte[] ct = c.doFinal(plain.getBytes(StandardCharsets.UTF_8));
+                byte[] all = new byte[16 + ct.length];
+                System.arraycopy(iv, 0, all, 0, 16);
+                System.arraycopy(ct, 0, all, 16, ct.length);
+                return PREFIX + Base64.getUrlEncoder().withoutPadding().encodeToString(all);
+            } catch (Exception e) {
+                throw new IllegalStateException("chiffrement impossible", e);
+            }
+        }
+
+        /** @throws IllegalStateException si la valeur n'a pas été chiffrée avec cette clé (ou a été altérée) */
+        public String decrypt(String stored) {
+            if (!stored.startsWith(PREFIX)) return stored;
+            try {
+                byte[] all = Base64.getUrlDecoder().decode(stored.substring(PREFIX.length()));
+                byte[] iv = Arrays.copyOf(all, 16);
+                Cipher c = Cipher.getInstance("AES/CTR/NoPadding");
+                c.init(Cipher.DECRYPT_MODE, enc, new IvParameterSpec(iv));
+                String plain = new String(c.doFinal(all, 16, all.length - 16), StandardCharsets.UTF_8);
+                if (!MessageDigest.isEqual(Arrays.copyOf(hmac(mac, plain), 16), iv)) throw new IllegalStateException("clé incorrecte ou valeur altérée");
+                return plain;
+            } catch (IllegalStateException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new IllegalStateException("déchiffrement impossible", e);
+            }
+        }
+
+        private static byte[] hmac(SecretKeySpec key, String plain) throws Exception {
+            Mac m = Mac.getInstance("HmacSHA256");
+            m.init(key);
+            return m.doFinal(plain.getBytes(StandardCharsets.UTF_8));
+        }
+    }
+
     /** Génère une clé de données aléatoire (outil d'installation). */
     public static String newKey() {
         byte[] b = new byte[48];

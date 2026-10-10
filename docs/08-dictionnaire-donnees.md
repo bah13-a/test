@@ -1,6 +1,6 @@
 # Dictionnaire de données
 
-Généré depuis le schéma PostgreSQL réel après application des migrations Flyway V1–V10 (`src/main/resources/db/migration` et `db/vendor/postgresql`) par `tools/gen_dictionary.py`.
+Généré depuis le schéma PostgreSQL réel après application des migrations Flyway V1–V12 (`src/main/resources/db/migration` et `db/vendor/postgresql`) par `tools/gen_dictionary.py`.
 Montants : `DECIMAL(12,3)` (millimes de dinar) ; totaux de période et reversements : `DECIMAL(14,3)`. Horodatages : `TIMESTAMP WITH TIME ZONE` (UTC).
 Les numéros de téléphone (`msisdn`) sont stockés **chiffrés** (`enc:v1:…`, AES-256 déterministe, clé `vas.data-key`) : colonnes `VARCHAR(100)`.
 
@@ -218,6 +218,18 @@ Historique horodaté de chaque transition de statut d'un MT.
 | `raw_status` | character varying(40) | oui |  |
 | `at` | timestamp with time zone | non |  |
 
+## `number_range`
+
+Plages de numéros (préfixe national) attribuées à un opérateur ; plus long préfixe gagnant. Chargées par import CSV.
+
+| Colonne | Type | Null | Défaut / référence |
+|---|---|---|---|
+| `id` | bigint | non |  |
+| `prefix` | character varying(12) | non |  |
+| `operator_id` | bigint | non | → `operator` |
+| `source` | character varying(60) | oui |  |
+| `updated_at` | timestamp with time zone | non |  |
+
 ## `operator`
 
 Opérateur mobile et paramètres métier de routage (les secrets SMPP vivent uniquement dans Jasmin).
@@ -265,6 +277,18 @@ Reversements aux partenaires (PENDING → PAID, créateur ≠ payeur, aucun chev
 | `paid_by` | character varying(80) | oui |  |
 | `reference` | character varying(100) | oui |  |
 
+## `ported_number`
+
+Numéros portés : exception exacte prioritaire sur les plages (numéro chiffré).
+
+| Colonne | Type | Null | Défaut / référence |
+|---|---|---|---|
+| `id` | bigint | non |  |
+| `msisdn` | character varying(100) | non |  |
+| `operator_id` | bigint | non | → `operator` |
+| `source` | character varying(60) | oui |  |
+| `updated_at` | timestamp with time zone | non |  |
+
 ## `quiz_progress`
 
 Progression d'un participant (question courante, score, terminé) : une partie par numéro et par service.
@@ -309,6 +333,33 @@ Lignes de rapprochement opérateur et écarts.
 | `platform_amount` | numeric | oui |  |
 | `result` | character varying(30) | non |  |
 | `comment` | character varying(400) | oui |  |
+
+## `rm_ledger_hourly`
+
+Modèle de lecture (CQRS) : événements de facturation par statut, par heure et service ; alimenté par les projections.
+
+| Colonne | Type | Null | Défaut / référence |
+|---|---|---|---|
+| `hour_ts` | timestamp with time zone | non |  |
+| `service_id` | bigint | non |  |
+| `status` | character varying(20) | non |  |
+| `events` | bigint | non |  |
+| `gross` | numeric | non |  |
+| `partner_share` | numeric | non |  |
+| `provider_share` | numeric | non |  |
+
+## `rm_traffic_hourly`
+
+Modèle de lecture (CQRS) : MO par issue et MT par statut courant, par heure de création, opérateur et service ; alimenté par les projections.
+
+| Colonne | Type | Null | Défaut / référence |
+|---|---|---|---|
+| `hour_ts` | timestamp with time zone | non |  |
+| `operator_id` | bigint | non |  |
+| `service_id` | bigint | non |  |
+| `kind` | character varying(2) | non |  |
+| `state` | character varying(20) | non |  |
+| `n` | bigint | non |  |
 
 ## `service_reply`
 

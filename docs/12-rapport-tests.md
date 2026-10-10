@@ -6,7 +6,12 @@ Environnement d'exécution : conteneur de développement (JDK 21, PostgreSQL 16,
 
 | Suite | Tests | Résultat | Contenu |
 |---|---|---|---|
-| `LifecycleTests` | 12 | OK | points 10 à 15 : renouvellement (reprise J+1, suspension après 3 échecs, remise à zéro), espacement du limiteur, TPS service/partenaire, envoi programmé, **facturation** (ajustements, clôture, période figée, relevés, reversements 4 yeux, isolation portail), OAuth2, anti-SSRF, mot de passe imposé + révocation des sessions, chiffrement des numéros |
+| `ArchitectureTests` | 6 | OK | règles CQRS (ArchUnit) : le côté requête ne dépend d'aucun service de commande, n'écrit jamais, n'expose que des GET ; le côté commande ignore les projections |
+| `SsrfPinningTests` | 3 | OK | résolveur DNS qui n'accepte que des adresses publiques (connexion réelle refusée), redirections non suivies |
+| `RekeyTests` | 3 | OK | rotation de DATA_KEY : simulation, réécriture, reprise, mauvaise clé |
+| `ReadWriteRoutingTests` | 1 | OK | lecture seule → réplica, commande → primaire |
+| `DeploymentGuardTests` | 2 | OK | image Jasmin 0.10.x imposée, alertes d'accusés manquants présentes |
+| `LifecycleTests` | 16 | OK | points 10 à 15 : renouvellement (reprise J+1, suspension après 3 échecs, remise à zéro), espacement du limiteur, TPS service/partenaire, envoi programmé, **facturation** (ajustements, clôture, période figée, relevés, reversements 4 yeux, isolation portail), OAuth2, anti-SSRF, mot de passe imposé + révocation des sessions, chiffrement des numéros |
 | `JasminHttpGatewayTests` | 3 | OK | classification des réponses Jasmin (412/429/5xx réessayés, 403/400 définitifs) |
 | `RetentionPostgresTests` | 1 | OK sur PG réel (ignoré sans `PG_TEST_URL`) | purge du journal d'audit à travers le trigger immuable |
 | `UnitTests` | 8 | OK | normalisation MSISDN, GSM-7/UCS-2 et segments, mapping DLR, répartition des revenus (somme exacte), signature webhook, **TOTP RFC 6238 (vecteur officiel)**, détection de langue, parsing CSV avec mapping |
@@ -17,7 +22,7 @@ Environnement d'exécution : conteneur de développement (JDK 21, PostgreSQL 16,
 | `FlowTests` | 25 | OK | MO→MT→DLR→facturation, rejeu MO/DLR idempotent, mot-clé inconnu, STOP (et arabe), double opt-in, service réglementé bloqué, lien coupé + balayeur, MO arabe/UCS-2, listes noire/blanche, MFA (enrôlement, jeton, verrouillage), portail partenaire isolé + audit, rapprochement XLSX/CSV + exports PDF/XLSX/CSV, webhooks MO/DLR signés, scopes API, RBAC, approbation 4-yeux |
 | Front (`vitest`) | 13 | OK | complétude des traductions FR/AR/EN, validation accessible des formulaires, modales, tableaux, pagination, histogramme avec tableau équivalent, changement de mot de passe |
 
-Total : **89 tests (76 Java dont 1 exécuté à part sur PostgreSQL réel + 13 front), 0 échec**.
+Total : **108 tests (95 Java dont 1 exécuté à part sur PostgreSQL réel + 13 front), 0 échec**.
 
 ## 2. Parcours navigateur (Chromium, `frontend/e2e/smoke.mjs`) sur PostgreSQL + Redis réels
 
@@ -57,5 +62,10 @@ Bandeau « environnement de démonstration », connexion avec un compte de démo
 
 ## 10. Lot « points 6 à 15 » (moteurs, facturation, API, comptes)
 - **Pile réelle** : `tests/integration/full-stack.mjs` passe à **33 vérifications, 0 échec** (OAuth2, anti-SSRF, MT programmé, facturation, mot de passe imposé, en plus du scénario MO/MT/DLR) ; `pg-audit.sh` 5/5 ; `failover.sh` 7/7 sur Jasmin 0.10.13 réel – voir `14-tests-integration.md` (13 défauts trouvés et corrigés au total).
-- **Navigateur** : `smoke.mjs` – 34 vérifications OK ; `a11y.mjs` – **38 vues (fr + ar, modales ouvertes), 884 contrôles axe, 0 violation WCAG 2.1 A/AA**.
+- **Navigateur** : `smoke.mjs` – 34 vérifications OK ; `a11y.mjs` – **40 vues (fr + ar, modales ouvertes), 928 contrôles axe, 0 violation WCAG 2.1 A/AA**.
 - Description fonctionnelle : `16-moteurs-facturation-comptes.md`.
+
+## 11. Lot « points techniques » et CQRS
+- **Pile réelle** : `full-stack.mjs` **39 vérifications, 0 échec** (dont tableau de bord / campagne / messages servis par le côté requête avec routage de lecture actif) ; `rekey.sh` 8/8 ; modèles de lecture égaux aux tables d'écriture sur PostgreSQL.
+- Défaut observé : accusé final des messages concaténés perdu par intermittence avec Jasmin 0.10.13 + simulateur (voir `14-tests-integration.md`, défaut 14).
+- Description : `17-architecture-cqrs.md` et `18-points-techniques-traites.md`.

@@ -72,6 +72,7 @@ public final class Repos {
 
     public interface MtHistoryRepo extends JpaRepository<MtStatusHistory, Long> {
         List<MtStatusHistory> findByMtIdOrderByAtAsc(Long mtId);
+        Optional<MtStatusHistory> findTopByMtIdOrderByIdDesc(Long mtId);
     }
 
     public interface SubscriptionRepo extends JpaRepository<Subscription, Long> {
@@ -178,6 +179,14 @@ public final class Repos {
     public interface ContentTokenRepo extends JpaRepository<ContentToken, Long> {
         Optional<ContentToken> findByToken(String token);
         long countByItem_Service(VasService s);
+    }
+
+    public interface NumberRangeRepo extends JpaRepository<NumberRange, Long> {
+        Optional<NumberRange> findByPrefix(String prefix);
+    }
+
+    public interface PortedNumberRepo extends JpaRepository<PortedNumber, Long> {
+        Optional<PortedNumber> findByMsisdn(String msisdn);
     }
 
     public interface VoteOptionRepo extends JpaRepository<VoteOption, Long> {

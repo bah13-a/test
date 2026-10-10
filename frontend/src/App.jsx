@@ -6,6 +6,7 @@ import { Portal } from './portal.jsx';
 import { Flash, ConfirmProvider } from './ui.jsx';
 import { Campaigns } from './engines.jsx';
 import { Billing } from './billing.jsx';
+import { Routing } from './routing.jsx';
 
 const has = (me, ...roles) => roles.some((r) => me.roles.includes(r));
 
@@ -13,6 +14,7 @@ function menu(me) {
   if (has(me, 'PARTNER')) return [['portal', 'portal', () => <Portal />]];
   const m = [['dashboard', 'dashboard', () => <P.Dashboard />]];
   if (has(me, 'SUPER_ADMIN', 'NOC', 'VAS_MANAGER')) m.push(['operators', 'operators', () => <P.Operators />]);
+  if (has(me, 'SUPER_ADMIN', 'NOC', 'VAS_MANAGER')) m.push(['routing', 'routing', () => <Routing canWrite />]);
   if (has(me, 'SUPER_ADMIN', 'NOC', 'VAS_MANAGER')) m.push(['shortcodes', 'shortcodes', () => <P.ShortCodes />]);
   if (has(me, 'SUPER_ADMIN', 'VAS_MANAGER', 'NOC', 'FINANCE', 'SUPPORT', 'AUDITOR')) m.push(['services', 'services', () => <P.Services />]);
   if (has(me, 'SUPER_ADMIN', 'VAS_MANAGER')) m.push(['partners', 'partners', () => <P.Partners />]);

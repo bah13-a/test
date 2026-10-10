@@ -1,5 +1,6 @@
 package tn.vas.web;
 
+import tn.vas.support.*;
 import java.io.IOException;
 import java.util.*;
 import org.springframework.http.HttpStatus;
@@ -142,24 +143,7 @@ public class EngineAdminController {
         return ResponseEntity.noContent().build();
     }
 
-    // ---- campagnes
-    @GetMapping("/services/{id}/campaign")
-    @PreAuthorize(AdminController.ANY)
-    public Map<String, Object> campaign(@PathVariable Long id, @RequestParam(defaultValue = "24") int hours) {
-        boolean finance = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
-                .anyMatch(a -> List.of("ROLE_SUPER_ADMIN", "ROLE_FINANCE", "ROLE_AUDITOR").contains(a.getAuthority()));
-        var out = campaigns.stats(svc(id, null), Math.max(1, Math.min(hours, 24 * 90)), finance);
-        out.put("results", campaigns.results(svc(id, null)));
-        return out;
-    }
 
-    @GetMapping("/services/{id}/campaign/export")
-    @PreAuthorize(AdminController.ANY)
-    public ResponseEntity<byte[]> campaignExport(@PathVariable Long id, @RequestParam(defaultValue = "pdf") String format) throws IOException {
-        var s = svc(id, null);
-        audit.log("CAMPAIGN_EXPORT", "service:" + id, format);
-        return Exports.respond(format, "campagne-" + id, "Résultats : " + s.getName(), campaigns.results(s));
-    }
 
     @PostMapping("/services/{id}/close")
     @PreAuthorize(AdminController.MGR)

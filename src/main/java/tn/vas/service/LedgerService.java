@@ -16,9 +16,11 @@ public class LedgerService {
     private final TariffRepo tariffs;
     private final Clock clock;
     private final BillingPeriodRepo periods;
+    private final org.springframework.context.ApplicationEventPublisher events;
 
-    public LedgerService(LedgerRepo ledger, TariffRepo tariffs, Clock clock, BillingPeriodRepo periods) {
+    public LedgerService(LedgerRepo ledger, TariffRepo tariffs, Clock clock, BillingPeriodRepo periods, org.springframework.context.ApplicationEventPublisher events) {
         this.periods = periods;
+        this.events = events;
         this.ledger = ledger;
         this.tariffs = tariffs;
         this.clock = clock;
@@ -51,7 +53,9 @@ public class LedgerService {
         e.setSourceReference(mt.getCorrelationId());
         e.setCreatedAt(now);
         e.setUpdatedAt(now);
-        return Optional.of(ledger.save(e));
+        e = ledger.save(e);
+        publish(e, null, BillingStatus.PENDING);
+        return Optional.of(e);
     }
 
     /** Transition de statut idempotente : un événement déjà CHARGED/REVERSED n'est jamais re-débité. */
@@ -73,7 +77,14 @@ public class LedgerService {
                 e.setBillingStatus(to);
                 e.setUpdatedAt(clock.instant());
                 ledger.save(e);
+                publish(e, from, to);
             }
         });
+    }
+
+    /** Notifie les modèles de lecture (voir Projections) : création (from == null) ou changement de statut. */
+    public void publish(LedgerEvent e, BillingStatus from, BillingStatus to) {
+        events.publishEvent(new tn.vas.event.DomainEvents.LedgerChanged(e.getCreatedAt(), e.getService() == null ? null : e.getService().getId(), from, to,
+                e.getGrossAmount(), e.getPartnerShare(), e.getProviderShare()));
     }
 }

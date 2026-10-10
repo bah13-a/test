@@ -18,9 +18,11 @@ public class MtService {
     private final LedgerService ledger;
     private final Clock clock;
     private final io.micrometer.core.instrument.MeterRegistry metrics;
+    private final org.springframework.context.ApplicationEventPublisher events;
 
     public MtService(MtRepo mts, MtHistoryRepo history, MtQueue queue, LedgerService ledger, Clock clock,
-                     io.micrometer.core.instrument.MeterRegistry metrics) {
+                     io.micrometer.core.instrument.MeterRegistry metrics, org.springframework.context.ApplicationEventPublisher events) {
+        this.events = events;
         this.metrics = metrics;
         this.mts = mts;
         this.history = history;
@@ -74,6 +76,7 @@ public class MtService {
     }
 
     void record(MtMessage m, MtStatus s, String raw) {
+        MtStatus previous = m.getId() == null ? null : history.findTopByMtIdOrderByIdDesc(m.getId()).map(MtStatusHistory::getStatus).orElse(null);
         var h = new MtStatusHistory();
         h.setMtId(m.getId());
         h.setStatus(s);
@@ -81,5 +84,6 @@ public class MtService {
         h.setAt(clock.instant());
         history.save(h);
         metrics.counter("vas.mt", "status", s.name()).increment();
+        events.publishEvent(new tn.vas.event.DomainEvents.MtTransitioned(m.getCreatedAt(), m.getOperator().getId(), m.getService() == null ? null : m.getService().getId(), previous, s));
     }
 }

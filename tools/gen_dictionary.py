@@ -14,6 +14,10 @@ NEW = {
     "content_item": "Contenus premium diffusables par lien (code, titre, texte/URL, nombre d'usages et durée du lien).",
     "content_token": "Jetons de lien à usage limité émis par numéro (hash, expiration, compteur d'usages).",
     "vote_option": "Options de vote déclarées d'un service (code court + libellé) ; sans option, tout texte est accepté.",
+    "number_range": "Plages de numéros (préfixe national) attribuées à un opérateur ; plus long préfixe gagnant. Chargées par import CSV.",
+    "ported_number": "Numéros portés : exception exacte prioritaire sur les plages (numéro chiffré).",
+    "rm_traffic_hourly": "Modèle de lecture (CQRS) : MO par issue et MT par statut courant, par heure de création, opérateur et service ; alimenté par les projections.",
+    "rm_ledger_hourly": "Modèle de lecture (CQRS) : événements de facturation par statut, par heure et service ; alimenté par les projections.",
     "vote_ballot": "Bulletins de vote : un par numéro et par service (unicité), option choisie et horodatage.",
 }
 old = OUT.read_text(encoding="utf-8") if OUT.exists() else ""

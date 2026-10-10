@@ -53,6 +53,10 @@ class LifecycleTests {
     @Autowired BillingPeriodRepo periods;
     @Autowired PayoutRepo payouts;
     @Autowired JdbcTemplate jdbc;
+    @Autowired tn.vas.query.ReportingQueries reporting;
+    @Autowired tn.vas.projection.Projections projections;
+    @Autowired MoRepo mos;
+    @Autowired io.micrometer.core.instrument.MeterRegistry meters;
 
     Operator tt;
     ShortCode sc;
@@ -409,5 +413,117 @@ class LifecycleTests {
         assertTrue(stored.startsWith("enc:v1:"), "stocké chiffré : " + stored);
         assertFalse(raw.isEmpty());
         assertTrue(jdbc.queryForObject("select msisdn from mo_message where id = (select max(id) from mo_message)", String.class).startsWith("enc:v1:"));
+    }
+
+    // ------------------------------------------------------------------ points techniques : freinage des échecs d'authentification
+    @Test
+    void repeatedAuthenticationFailuresFromOneSourceAreThrottled() throws Exception {
+        String key = "vas_throttle_" + sn;
+        var c = new ApiClient();
+        c.setName("thr"); c.setPartner(partner); c.setScopes("services:read"); c.setKeyHash(ApiKeyFilter.sha256(key));
+        apiClients.save(c);
+        var from = (org.springframework.test.web.servlet.request.RequestPostProcessor) r -> { r.setRemoteAddr("203.0.113." + (SN.get() % 250)); return r; };
+        for (int i = 0; i < 20; i++) mvc.perform(get("/api/v1/services").header("X-API-Key", "mauvaise-" + i).with(from)).andExpect(status().isUnauthorized());
+        // la source est maintenant freinée, même avec une clé valide
+        mvc.perform(get("/api/v1/services").header("X-API-Key", key).with(from)).andExpect(status().isTooManyRequests()).andExpect(header().string("Retry-After", "60"));
+        // une autre source n'est pas affectée
+        mvc.perform(get("/api/v1/services").header("X-API-Key", key)).andExpect(status().isOk());
+        // idem pour la connexion à l'interface
+        var from2 = (org.springframework.test.web.servlet.request.RequestPostProcessor) r -> { r.setRemoteAddr("198.51.100." + (SN.get() % 250)); return r; };
+        for (int i = 0; i < 20; i++) mvc.perform(post("/auth/login").with(from2).contentType(MediaType.APPLICATION_JSON).content("{\"username\":\"inconnu" + i + "\",\"password\":\"xxxxxxxxxxxx1\"}")).andExpect(status().isUnauthorized());
+        mvc.perform(post("/auth/login").with(from2).contentType(MediaType.APPLICATION_JSON).content("{\"username\":\"root\",\"password\":\"" + PW + "\"}")).andExpect(status().isTooManyRequests());
+    }
+
+    // ------------------------------------------------------------------ routage : plages, portabilité, import
+    @Test
+    void routingUsesPortedNumberThenLongestPrefixAndAcceptsCsvImport() throws Exception {
+        user("noc_a", "NOC", null);
+        var noc = httpBasic("noc_a", PW);
+        String prefix = sn; // 5 chiffres, unique par test
+        String num = prefix + "123";
+        var ranges = new org.springframework.mock.web.MockMultipartFile("file", "plages.csv", "text/csv", ("prefix;operator\n" + prefix.substring(0, 3) + ";OOREDOO\n" + prefix + ";TT\nabc;TT\n" + prefix + ";INCONNU\n").getBytes());
+        mvc.perform(multipart("/admin/routing/import").file(ranges).param("kind", "ranges").with(noc)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.created").value(2)).andExpect(jsonPath("$.rejected").value(2));
+        // plus long préfixe : le préfixe à 5 chiffres (TT) l'emporte sur celui à 3 chiffres (OOREDOO)
+        mvc.perform(get("/admin/routing/resolve").param("msisdn", num).with(noc)).andExpect(jsonPath("$.operator").value("TT")).andExpect(jsonPath("$.routed").value(true));
+        // numéro porté : exception exacte prioritaire
+        var ported = new org.springframework.mock.web.MockMultipartFile("file", "ports.csv", "text/csv", (num + ";ORANGE\n").getBytes());
+        mvc.perform(multipart("/admin/routing/import").file(ported).param("kind", "ported").with(noc)).andExpect(jsonPath("$.created").value(1));
+        mvc.perform(get("/admin/routing/resolve").param("msisdn", num).with(noc)).andExpect(jsonPath("$.operator").value("ORANGE"));
+        mvc.perform(get("/admin/routing/resolve").param("msisdn", prefix + "999").with(noc)).andExpect(jsonPath("$.operator").value("TT"));
+        // numéro porté stocké chiffré
+        assertTrue(jdbc.queryForObject("select msisdn from ported_number order by id desc limit 1", String.class).startsWith("enc:v1:"));
+        // l'API route sans operator ni serviceId grâce aux plages
+        String key = "vas_route_" + sn;
+        var c = new ApiClient();
+        c.setName("route"); c.setScopes("messages:send"); c.setKeyHash(ApiKeyFilter.sha256(key));
+        apiClients.save(c);
+        mvc.perform(post("/api/v1/messages").header("X-API-Key", key).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"to\":\"" + num + "\",\"text\":\"salut\",\"sender\":\"WEB\"}")).andExpect(status().isAccepted());
+        assertEquals("ORANGE", mts.findTop100ByMsisdnOrderByCreatedAtDesc("+216" + num).get(0).getOperator().getCode());
+        // rôle sans droit d'écriture
+        mvc.perform(multipart("/admin/routing/import").file(ranges).param("kind", "ranges").with(httpBasic("fin_a", PW))).andExpect(status().isForbidden());
+    }
+
+    // ------------------------------------------------------------------ CQRS : modèles de lecture
+    private java.util.Map<String, java.util.Map<String, Long>> readModel() {
+        return reporting.traffic("MO", new java.sql.Timestamp(0), abo.getId()).isEmpty() && reporting.traffic("MT", new java.sql.Timestamp(0), abo.getId()).isEmpty()
+                ? java.util.Map.of("mo", java.util.Map.of(), "mt", java.util.Map.of())
+                : java.util.Map.of("mo", reporting.traffic("MO", new java.sql.Timestamp(0), abo.getId()), "mt", reporting.traffic("MT", new java.sql.Timestamp(0), abo.getId()));
+    }
+
+    private java.util.Map<String, java.util.Map<String, Long>> writeModel() {
+        java.util.Map<String, Long> mo = new java.util.TreeMap<>(), mt = new java.util.TreeMap<>();
+        mos.countByOutcome(abo).forEach(o -> mo.put(o[0].toString(), (Long) o[1]));
+        mts.countByStatus(abo).forEach(o -> mt.put(o[0].toString(), (Long) o[1]));
+        return java.util.Map.of("mo", mo, "mt", mt);
+    }
+
+    @Test
+    void readModelsFollowTheWriteModelThroughEvents() throws Exception {
+        for (int i = 0; i < 3; i++) mo(msisdn(), "ABO");
+        var first = mts.findAll().stream().filter(m -> m.getService() != null && m.getService().getId().equals(abo.getId())).findFirst().orElseThrow();
+        dlr(first, "DELIVRD");
+        assertEquals(writeModel(), readModel(), "la projection reflète exactement les tables d'écriture (MO par issue, MT par statut courant)");
+        assertTrue(readModel().get("mt").getOrDefault("DELIVERED", 0L) >= 1);
+        // facturation : mêmes totaux que le ledger
+        var proj = (java.util.Map<?, ?>) reporting.billing(new java.sql.Timestamp(0), java.util.List.of(abo.getId()));
+        for (Object[] o : ledger.totalsByStatus(java.util.List.of(abo))) {
+            var row = (java.util.Map<?, ?>) proj.get(o[0].toString());
+            assertNotNull(row, "statut " + o[0]);
+            assertEquals(0, ((BigDecimal) o[1]).compareTo((BigDecimal) row.get("gross")));
+            assertEquals(0, ((BigDecimal) o[2]).compareTo((BigDecimal) row.get("partner")));
+            assertEquals(((Number) o[4]).longValue(), ((Number) row.get("events")).longValue());
+        }
+        // les contrôleurs de requête servent ces données
+        user("aud_a", "AUDITOR", null);
+        mvc.perform(get("/admin/dashboard").with(httpBasic("aud_a", PW))).andExpect(status().isOk()).andExpect(jsonPath("$.mo.ROUTED").exists());
+        mvc.perform(get("/admin/services/" + abo.getId() + "/campaign").with(httpBasic("aud_a", PW))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.mt.DELIVERED").exists()).andExpect(jsonPath("$.billing").exists());
+    }
+
+    @Test
+    void reconciliationHealsLostEventsAndProjectionFailuresNeverBreakCommands() throws Exception {
+        mo(msisdn(), "ABO");
+        assertEquals(writeModel(), readModel());
+        // événements perdus (ex. arrêt entre commit et projection) : la réconciliation recalcule depuis les tables sources
+        jdbc.update("delete from rm_traffic_hourly where service_id = ?", abo.getId());
+        jdbc.update("delete from rm_ledger_hourly where service_id = ?", abo.getId());
+        assertTrue(readModel().get("mt").isEmpty());
+        projections.reconcile();
+        assertEquals(writeModel(), readModel());
+        // la table de lecture est indisponible : le MO est quand même traité (le côté commande n'attend pas la projection)
+        double before = meters.counter("vas.projection.error", "event", "MoRecorded").count();
+        jdbc.execute("alter table rm_traffic_hourly rename to rm_traffic_hourly_off");
+        try {
+            String from = msisdn();
+            mo(from, "ABO");
+            assertTrue(subs.findByMsisdnAndService("+216" + from, abo).isPresent(), "l'abonnement est créé malgré l'échec de projection");
+        } finally {
+            jdbc.execute("alter table rm_traffic_hourly_off rename to rm_traffic_hourly");
+        }
+        assertTrue(meters.counter("vas.projection.error", "event", "MoRecorded").count() > before, "l'échec est compté pour l'alerte");
+        projections.reconcile();
+        assertEquals(writeModel(), readModel(), "la réconciliation rattrape l'événement manqué");
     }
 }

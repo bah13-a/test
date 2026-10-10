@@ -35,6 +35,8 @@ Autres commandes :
 | Parcours navigateur | `frontend/e2e/smoke.mjs` (enrôlement MFA, tous les écrans, portail, arabe RTL) |
 | Charge | `node tests/load/load.mjs 3000 50` ou `tests/load/k6-mo-mt.js` |
 
+Chiffrages (PDF + générateurs) : `docs/chiffrage/` — dont la réalisation complète en 2 mois au prix du marché tunisien (`Chiffrage_realisation_2_mois_VAS_SMPP_Tunisie.pdf`).
+
 Adresses : UI `/` · Swagger `/swagger-ui.html` (spec figée : `docs/openapi.json`) · Grafana `:3000` · Prometheus `:9090`.
 Provisionnement Jasmin : `infra/jasmin/provision.sh` (variables `TT_*`, `ORANGE_*`, `OOREDOO_*` du `.env` ; `DRY_RUN=1` pour relire sans appliquer).
 
@@ -49,7 +51,9 @@ Provisionnement Jasmin : `infra/jasmin/provision.sh` (variables `TT_*`, `ORANGE_
 | **E** Back-office | React (FR/AR/EN, RTL, responsive) : tableau de bord, campagnes, facturation, opérateurs, short codes, services/mots-clés/réponses, partenaires, tarifs, messages, ledger, rapprochement, listes, support/consentements, utilisateurs, clients API, audit, MFA ; 7 rôles RBAC ; exports |
 | **F** Portail partenaire | rôle `PARTNER` isolé : volumes, taux de livraison, résultats par contenu, montants estimés vs rapprochés, exports |
 | **G** HA / supervision | métriques Prometheus + dashboard Grafana + alertes ; logs JSON + Loki ; topologie HA de référence ; sauvegarde GPG, restauration et test de restauration scriptés **et exécutés** |
-| **H** Documentation | `docs/` : HLD, LLD, moteurs/facturation/comptes (16), guides admin/NOC/utilisateur, PRA, rapport de sécurité, dictionnaire de données, licences, formation/PV, matrice de recette, rapport de tests, fiche opérateur, OpenAPI |
+| **H** Documentation | `docs/` : HLD, LLD, moteurs/facturation/comptes (16), architecture CQRS (17), points techniques traités (18), guides admin/NOC/utilisateur, PRA, rapport de sécurité, dictionnaire de données, licences, formation/PV, matrice de recette, rapport de tests, fiche opérateur, OpenAPI |
+
+Architecture **CQRS** (côté requête sur modèles de lecture et réplica optionnel, règles vérifiées par ArchUnit) ; rotation de clé (`Rekey`), freinage des échecs d'authentification, anti-SSRF au niveau de la connexion.
 
 Sécurité : **numéros chiffrés en base (AES-256, clé `DATA_KEY`)**, journal d'audit immuable (PostgreSQL), changement de mot de passe imposé et révocation des sessions, bcrypt, verrouillage après 5 échecs, **MFA TOTP** (obligatoire SUPER_ADMIN/FINANCE), jetons de session HMAC, audit des accès refusés, MSISDN masqués, protection des exports contre l'injection de formules, CSP et en-têtes de sécurité, secrets uniquement par environnement.
 
@@ -58,7 +62,7 @@ Sécurité : **numéros chiffrés en base (AES-256, clé `DATA_KEY`)**, journal 
 - **Clé `DATA_KEY`** : sauvegardée hors serveur ; sa perte rend les numéros chiffrés irrécupérables (`docs/16-moteurs-facturation-comptes.md`).
 - La topologie HA (`infra/ha`) et le cluster RabbitMQ n'ont pas été démarrés (pas de Docker dans l'environnement de développement) : à valider en préproduction.
 - Test d'intrusion et test de charge à 200 SMS/s sur l'infrastructure cible : à faire. Résultats mesurés : `docs/12-rapport-tests.md`.
-- Le routage MT par préfixe n'est pas pré-rempli (portabilité des numéros) : l'opérateur vient du service/short code ou de l'appelant.
+- Aucune plage de numéros n'est préchargée (attributions et portabilité = données officielles à importer, écran *Routage*) : à défaut, l'opérateur vient du service/short code, de l'appelant ou des préfixes déclarés.
 - Durées de conservation et textes d'information : à fixer avec le conseil juridique (CDC §11.3).
 - Options hors V1 (USSD, DCB, IVR, RCS/WhatsApp, BI, antifraude, appli mobile, serveur SMPP) : chiffrées, non codées.
 

@@ -19,6 +19,20 @@ stop_all() {
   sleep 1; rm -f /tmp/jasmind* /tmp/dlrd-master.lock* /tmp/dlrlookupd-master.lock* /tmp/deliversmd* 2>/dev/null || true   # verrous périmés d'un arrêt brutal ("Lock not acquired")
 }
 
+start_app() {
+  HASH="$(java -Dloader.main=tn.vas.tools.HashPassword -cp "$JAR" org.springframework.boot.loader.launch.PropertiesLauncher "$ADMIN_PW" 2>/dev/null)"
+  (SPRING_PROFILES_ACTIVE=pro DB_URL=jdbc:postgresql://localhost:$PGPORT/vas DB_USER=vas DB_PASSWORD=Zx9-db-real-password RABBIT_HOST=localhost RABBIT_USER=guest RABBIT_PASSWORD=guest \
+    REDIS_HOST=localhost REDIS_PORT=$REDIS_APP VAS_PUBLIC_BASE_URL=http://vasapp.local:$APP_PORT READ_DB_URL=jdbc:postgresql://localhost:$PGPORT/vas DATA_KEY=${DATA_KEY:-Zx9-data-key-integration-0123456789abcdefghijklmnop} TOKEN_SECRET=Zx9-token-secret-very-long-random-0123456789 JASMIN_URL=http://127.0.0.1:1401 \
+    JASMIN_PASSWORD=$JASMIN_PASSWORD CALLBACK_SECRET=$CALLBACK_SECRET ADMIN_PASSWORD_HASH="$HASH" TT_MSISDN_PREFIXES="9,4" TT_SHORT_CODES="85500,85503" TT_TPS=50 \
+    nohup java -jar "$JAR" --server.port=$APP_PORT > /tmp/app-pro.log 2>&1 &)
+  for _ in $(seq 1 40); do sleep 3; [ "$(curl -s -o /dev/null -w '%{http_code}' localhost:$APP_PORT/auth/env)" = 200 ] && break; done
+}
+
+stop_app() {
+  for p in $(ps -eo pid,args | awk '/[v]as-platform-1.0.0.jar --server.port=18090/{print $1}'); do kill "$p" 2>/dev/null || true; done
+  sleep 3
+}
+
 up() {
   stop_all; sleep 2
   command -v rabbitmqctl >/dev/null && (rabbitmqctl -q status >/dev/null 2>&1 || (rabbitmq-server -detached; sleep 20))
@@ -35,18 +49,15 @@ up() {
   sleep 15
   TT_SMSC_HOST=127.0.0.1 TT_SMSC_PORT=$SIM_SMPP TT_SYSTEM_ID=sim TT_SMSC_PASSWORD=sim JASMIN_PASSWORD=$JASMIN_PASSWORD CALLBACK_SECRET=$CALLBACK_SECRET \
     APP_URL=http://vasapp.local:$APP_PORT JCLI_HOST=127.0.0.1 JCLI_PORT=8990 JCLI_USER=jcliadmin JCLI_PASSWORD=jclipwd "$HERE/infra/jasmin/provision.sh" > /tmp/provision.out
-  HASH="$(java -Dloader.main=tn.vas.tools.HashPassword -cp "$JAR" org.springframework.boot.loader.launch.PropertiesLauncher "$ADMIN_PW" 2>/dev/null)"
-  (SPRING_PROFILES_ACTIVE=pro DB_URL=jdbc:postgresql://localhost:$PGPORT/vas DB_USER=vas DB_PASSWORD=Zx9-db-real-password RABBIT_HOST=localhost RABBIT_USER=guest RABBIT_PASSWORD=guest \
-    REDIS_HOST=localhost REDIS_PORT=$REDIS_APP VAS_PUBLIC_BASE_URL=http://vasapp.local:$APP_PORT DATA_KEY=Zx9-data-key-integration-0123456789abcdefghijklmnop TOKEN_SECRET=Zx9-token-secret-very-long-random-0123456789 JASMIN_URL=http://127.0.0.1:1401 \
-    JASMIN_PASSWORD=$JASMIN_PASSWORD CALLBACK_SECRET=$CALLBACK_SECRET ADMIN_PASSWORD_HASH="$HASH" TT_MSISDN_PREFIXES="9,4" TT_SHORT_CODES="85500,85503" TT_TPS=50 \
-    nohup java -jar "$JAR" --server.port=$APP_PORT > /tmp/app-pro.log 2>&1 &)
-  for _ in $(seq 1 40); do sleep 3; [ "$(curl -s -o /dev/null -w '%{http_code}' localhost:$APP_PORT/auth/env)" = 200 ] && break; done
+  start_app
   echo "pile prête : app :$APP_PORT, simulateur :$SIM_CTL, Jasmin jcli :8990 / http :1401"
 }
 
 case "${1:-}" in
   up) up ;;
   down) stop_all ;;
+  stop-app) stop_app ;;
+  start-app) start_app ;;
   test) up; BASE=http://localhost:$APP_PORT SIM=http://localhost:$SIM_CTL ADMIN_USER=admin ADMIN_PASSWORD="$ADMIN_PW" node "$HERE/tests/integration/full-stack.mjs" ;;
   *) echo "usage : $0 up|down|test" >&2; exit 2 ;;
 esac

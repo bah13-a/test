@@ -28,9 +28,11 @@ public class AuthController {
     private final String dummyHash;
     private final org.springframework.core.env.Environment environment;
     private final tn.vas.config.VasProperties props;
+    private final tn.vas.security.AuthThrottle throttle;
 
     public AuthController(UserRepo users, PasswordEncoder encoder, TokenService tokens, AuditService audit, Clock clock,
-                          org.springframework.core.env.Environment environment, tn.vas.config.VasProperties props) {
+                          org.springframework.core.env.Environment environment, tn.vas.config.VasProperties props, tn.vas.security.AuthThrottle throttle) {
+        this.throttle = throttle;
         this.environment = environment;
         this.props = props;
         this.users = users;
@@ -48,18 +50,22 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody LoginRequest r) {
+    public ResponseEntity<?> login(jakarta.servlet.http.HttpServletRequest req, @RequestBody LoginRequest r) {
+        String src = tn.vas.security.AuthThrottle.source(req);
+        if (throttle.blocked(src)) return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).header("Retry-After", "60").body(Map.of("error", "trop de tentatives, réessayer dans une minute"));
         var u = r.username() == null ? null : users.findByUsername(r.username()).orElse(null);
         // comparaison factice si le compte n'existe pas : égalise le temps de réponse (pas d'énumération de comptes)
         boolean pwOk = encoder.matches(String.valueOf(r.password()), u != null ? u.getPasswordHash() : dummyHash) && u != null;
-        if (u == null || !u.isActive() || (u.getLockedUntil() != null && u.getLockedUntil().isAfter(clock.instant()))) return deny();
+        if (u == null || !u.isActive() || (u.getLockedUntil() != null && u.getLockedUntil().isAfter(clock.instant()))) { throttle.fail(src); return deny(); }
         if (!pwOk) {
+            throttle.fail(src);
             u.setFailedLogins(u.getFailedLogins() + 1);
             if (u.getFailedLogins() >= 5) u.setLockedUntil(clock.instant().plus(Duration.ofMinutes(15)));
             users.save(u);
             return deny();
         }
         if (u.isMfaEnabled() && !Totp.verify(u.getTotpSecret(), r.code(), clock.millis())) {
+            throttle.fail(src);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).header("X-MFA-Required", "true").body(Map.of("error", "code MFA requis ou invalide"));
         }
         u.setFailedLogins(0);

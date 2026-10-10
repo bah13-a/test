@@ -1,4 +1,4 @@
-package tn.vas.web;
+package tn.vas.support;
 
 import com.lowagie.text.Document;
 import com.lowagie.text.FontFactory;
@@ -16,10 +16,10 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.http.*;
 
 /** Exports CSV / XLSX / PDF de tableaux de lignes (liste de maps ordonnées). */
-final class Exports {
+public final class Exports {
     private Exports() {}
 
-    static ResponseEntity<byte[]> respond(String format, String name, String title, List<? extends Map<String, ?>> rows) throws IOException {
+    public static ResponseEntity<byte[]> respond(String format, String name, String title, List<? extends Map<String, ?>> rows) throws IOException {
         List<String> cols = new ArrayList<>();
         for (var r : rows) for (String k : r.keySet()) if (!cols.contains(k)) cols.add(k);
         byte[] body;
@@ -35,7 +35,7 @@ final class Exports {
     }
 
     /** Neutralise l'injection de formules dans Excel/LibreOffice (préfixe ' pour = + - @). */
-    static String safe(Object v) {
+    public static String safe(Object v) {
         String s = v == null ? "" : String.valueOf(v);
         return !s.isEmpty() && "=+-@".indexOf(s.charAt(0)) >= 0 && !s.matches("-?\\d+([.,]\\d+)?") ? "'" + s : s;
     }

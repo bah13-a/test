@@ -1168,6 +1168,54 @@
     }
    }
   },
+  "/admin/routing/import": {
+   "post": {
+    "tags": [
+     "routing-admin-controller"
+    ],
+    "operationId": "importCsv",
+    "parameters": [
+     {
+      "name": "kind",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "multipart/form-data": {
+       "schema": {
+        "required": [
+         "file"
+        ],
+        "type": "object",
+        "properties": {
+         "file": {
+          "type": "string",
+          "format": "binary"
+         }
+        }
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "$ref": "#/components/schemas/ImportResult"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/admin/reconciliation/{operatorCode}": {
    "post": {
     "tags": [
@@ -1669,7 +1717,7 @@
   "/admin/billing/periods": {
    "get": {
     "tags": [
-     "billing-controller"
+     "billing-query-controller"
     ],
     "operationId": "periods",
     "responses": {
@@ -1726,9 +1774,9 @@
   "/admin/billing/payouts": {
    "get": {
     "tags": [
-     "billing-controller"
+     "billing-query-controller"
     ],
-    "operationId": "payouts",
+    "operationId": "payouts_1",
     "responses": {
      "200": {
       "description": "OK",
@@ -2254,7 +2302,7 @@
   "/portal/summary": {
    "get": {
     "tags": [
-     "portal-controller"
+     "portal-query-controller"
     ],
     "operationId": "summary",
     "responses": {
@@ -2277,9 +2325,9 @@
   "/portal/statements": {
    "get": {
     "tags": [
-     "billing-controller"
+     "portal-query-controller"
     ],
-    "operationId": "myStatement",
+    "operationId": "statements",
     "parameters": [
      {
       "name": "from",
@@ -2326,7 +2374,7 @@
   "/portal/services": {
    "get": {
     "tags": [
-     "portal-controller"
+     "portal-query-controller"
     ],
     "operationId": "services",
     "responses": {
@@ -2352,7 +2400,7 @@
   "/portal/results": {
    "get": {
     "tags": [
-     "portal-controller"
+     "portal-query-controller"
     ],
     "operationId": "results",
     "parameters": [
@@ -2389,9 +2437,9 @@
   "/portal/payouts": {
    "get": {
     "tags": [
-     "billing-controller"
+     "portal-query-controller"
     ],
-    "operationId": "myPayouts",
+    "operationId": "payouts",
     "responses": {
      "200": {
       "description": "OK",
@@ -2415,7 +2463,7 @@
   "/portal/export": {
    "get": {
     "tags": [
-     "portal-controller"
+     "portal-query-controller"
     ],
     "operationId": "export",
     "parameters": [
@@ -2660,7 +2708,7 @@
   "/admin/services/{id}/campaign": {
    "get": {
     "tags": [
-     "engine-admin-controller"
+     "campaign-query-controller"
     ],
     "operationId": "campaign",
     "parameters": [
@@ -2704,7 +2752,7 @@
   "/admin/services/{id}/campaign/export": {
    "get": {
     "tags": [
-     "engine-admin-controller"
+     "campaign-query-controller"
     ],
     "operationId": "campaignExport",
     "parameters": [
@@ -2742,10 +2790,69 @@
     }
    }
   },
+  "/admin/routing/resolve": {
+   "get": {
+    "tags": [
+     "routing-admin-controller"
+    ],
+    "operationId": "resolve",
+    "parameters": [
+     {
+      "name": "msisdn",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "object"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/routing/ranges": {
+   "get": {
+    "tags": [
+     "routing-admin-controller"
+    ],
+    "operationId": "ranges",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "*/*": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "object"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/admin/reports/summary/export": {
    "get": {
     "tags": [
-     "admin-controller"
+     "reporting-query-controller"
     ],
     "operationId": "summaryExport",
     "parameters": [
@@ -2787,7 +2894,7 @@
   "/admin/reconciliation/{batch}": {
    "get": {
     "tags": [
-     "admin-controller"
+     "reporting-query-controller"
     ],
     "operationId": "reconItems",
     "parameters": [
@@ -2856,7 +2963,7 @@
   "/admin/reconciliation/{batch}/export": {
    "get": {
     "tags": [
-     "admin-controller"
+     "reporting-query-controller"
     ],
     "operationId": "reconExport",
     "parameters": [
@@ -2939,7 +3046,7 @@
   "/admin/messages": {
    "get": {
     "tags": [
-     "admin-controller"
+     "reporting-query-controller"
     ],
     "operationId": "messages",
     "parameters": [
@@ -3076,7 +3183,7 @@
   "/admin/ledger": {
    "get": {
     "tags": [
-     "admin-controller"
+     "reporting-query-controller"
     ],
     "operationId": "ledger",
     "parameters": [
@@ -3156,7 +3263,7 @@
   "/admin/ledger/export": {
    "get": {
     "tags": [
-     "admin-controller"
+     "reporting-query-controller"
     ],
     "operationId": "ledgerExport",
     "parameters": [
@@ -3222,7 +3329,7 @@
   "/admin/dashboard": {
    "get": {
     "tags": [
-     "admin-controller"
+     "reporting-query-controller"
     ],
     "operationId": "dashboard",
     "parameters": [
@@ -3257,7 +3364,7 @@
   "/admin/consents": {
    "get": {
     "tags": [
-     "admin-controller"
+     "reporting-query-controller"
     ],
     "operationId": "consents",
     "parameters": [
@@ -3302,7 +3409,7 @@
   "/admin/consents/export": {
    "get": {
     "tags": [
-     "admin-controller"
+     "reporting-query-controller"
     ],
     "operationId": "consentsExport",
     "parameters": [
@@ -3342,7 +3449,7 @@
   "/admin/billing/statements": {
    "get": {
     "tags": [
-     "billing-controller"
+     "billing-query-controller"
     ],
     "operationId": "statement",
     "parameters": [
@@ -3400,7 +3507,7 @@
   "/admin/audit": {
    "get": {
     "tags": [
-     "admin-controller"
+     "reporting-query-controller"
     ],
     "operationId": "audit",
     "parameters": [
@@ -3494,6 +3601,30 @@
      "admin-controller"
     ],
     "operationId": "deleteRule",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "format": "int64"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/admin/routing/ranges/{id}": {
+   "delete": {
+    "tags": [
+     "routing-admin-controller"
+    ],
+    "operationId": "deleteRange",
     "parameters": [
      {
       "name": "id",
@@ -3990,6 +4121,29 @@
      },
      "reason": {
       "type": "string"
+     }
+    }
+   },
+   "ImportResult": {
+    "type": "object",
+    "properties": {
+     "created": {
+      "type": "integer",
+      "format": "int32"
+     },
+     "updated": {
+      "type": "integer",
+      "format": "int32"
+     },
+     "rejected": {
+      "type": "integer",
+      "format": "int32"
+     },
+     "errors": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
      }
     }
    },

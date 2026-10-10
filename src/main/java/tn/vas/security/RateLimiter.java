@@ -11,14 +11,31 @@ public interface RateLimiter {
     /** @return true si la requête est autorisée dans la minute courante. */
     boolean allow(String key, int perMinute);
 
+    /** Incrémente le compteur de la minute courante et retourne sa valeur (échecs d'authentification). */
+    long hit(String key);
+
+    /** Valeur du compteur de la minute courante, sans l'incrémenter. */
+    long peek(String key);
+
     class InMemory implements RateLimiter {
         private final ConcurrentHashMap<String, long[]> w = new ConcurrentHashMap<>();
 
         @Override
         public boolean allow(String key, int perMinute) {
+            return hit(key) <= perMinute;
+        }
+
+        @Override
+        public long hit(String key) {
             long minute = System.currentTimeMillis() / 60000;
-            long[] s = w.compute(key, (k, v) -> v == null || v[0] != minute ? new long[]{minute, 1} : new long[]{minute, v[1] + 1});
-            return s[1] <= perMinute;
+            return w.compute(key, (k, v) -> v == null || v[0] != minute ? new long[]{minute, 1} : new long[]{minute, v[1] + 1})[1];
+        }
+
+        @Override
+        public long peek(String key) {
+            long minute = System.currentTimeMillis() / 60000;
+            long[] v = w.get(key);
+            return v == null || v[0] != minute ? 0 : v[1];
         }
     }
 
@@ -41,22 +58,39 @@ public interface RateLimiter {
 
         @Override
         public boolean allow(String key, int perMinute) {
-            if (System.currentTimeMillis() < skipRedisUntil) return local(key, perMinute);
+            return hit(key) <= perMinute;
+        }
+
+        @Override
+        public long hit(String key) {
+            if (System.currentTimeMillis() < skipRedisUntil) return local(key);
             try {
                 String k = "rl:" + key + ":" + System.currentTimeMillis() / 60000;
                 Long n = redis.opsForValue().increment(k);
                 if (n != null && n == 1L) redis.expire(k, Duration.ofSeconds(70));
-                return n != null && n <= perMinute;
+                return n == null ? Long.MAX_VALUE : n;
             } catch (RuntimeException e) {
                 skipRedisUntil = System.currentTimeMillis() + 10_000;
                 log.warn("Redis indisponible pour les quotas API : repli sur compteur local pendant 10 s ({})", e.getClass().getSimpleName());
-                return local(key, perMinute);
+                return local(key);
             }
         }
 
-        private boolean local(String key, int perMinute) {
+        @Override
+        public long peek(String key) {
+            if (System.currentTimeMillis() < skipRedisUntil) return fallback.peek(key);
+            try {
+                String v = redis.opsForValue().get("rl:" + key + ":" + System.currentTimeMillis() / 60000);
+                return v == null ? 0 : Long.parseLong(v);
+            } catch (RuntimeException e) {
+                skipRedisUntil = System.currentTimeMillis() + 10_000;
+                return fallback.peek(key);
+            }
+        }
+
+        private long local(String key) {
             fallbackCount.increment();
-            return fallback.allow(key, perMinute);
+            return fallback.hit(key);
         }
     }
 

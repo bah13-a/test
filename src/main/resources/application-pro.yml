@@ -44,6 +44,11 @@ vas:
     max-attempts: ${MT_MAX_ATTEMPTS:5}
     backoff-seconds: ${MT_RETRY_BACKOFF_SECONDS:30}
   mo-dedup-seconds: ${MO_DEDUP_SECONDS:30}
+  # CQRS : réplica PostgreSQL pour le côté requête (lecture seule). Vide = une seule base.
+  read-db:
+    url: ${READ_DB_URL:}
+    username: ${READ_DB_USER:${DB_USER}}
+    password: ${READ_DB_PASSWORD:${DB_PASSWORD}}
   webhook:
     allowed-hosts: ${WEBHOOK_ALLOWED_HOSTS:}   # liste blanche optionnelle d'hôtes (séparés par des virgules) ; https et adresses publiques imposés
   operators-sync: ${OPERATORS_SYNC:create-only}   # create-only : crée ce qui manque ; overwrite : la configuration écrase la base

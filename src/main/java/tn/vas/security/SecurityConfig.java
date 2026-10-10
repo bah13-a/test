@@ -28,12 +28,12 @@ public class SecurityConfig {
 
     @Bean
     SecurityFilterChain chain(HttpSecurity http, ApiClientRepo clients, RateLimiter limiter, VasProperties props,
-                           java.time.Clock clock, tn.vas.service.AuditService audit, TokenService tokens, UserService userService) throws Exception {
+                           java.time.Clock clock, tn.vas.service.AuditService audit, TokenService tokens, UserService userService, AuthThrottle throttle) throws Exception {
         http.csrf(c -> c.disable())
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .httpBasic(b -> b.authenticationEntryPoint((req, res, ex) -> res.sendError(401, "unauthorized"))) // sans WWW-Authenticate : pas de boîte de dialogue navigateur
             .addFilterBefore(new BearerFilter(tokens, userService), BasicAuthenticationFilter.class)
-            .addFilterBefore(new ApiKeyFilter(clients, limiter, tokens), BasicAuthenticationFilter.class)
+            .addFilterBefore(new ApiKeyFilter(clients, limiter, tokens, throttle), BasicAuthenticationFilter.class)
             .exceptionHandling(e -> e.accessDeniedHandler((req, res, ex) -> {
                 audit.log("ACCESS_DENIED", req.getMethod() + " " + req.getRequestURI(), null); // tentative d'accès refusée tracée (Annexe A14)
                 res.sendError(403, "forbidden");

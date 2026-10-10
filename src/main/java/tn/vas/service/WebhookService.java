@@ -33,7 +33,7 @@ public class WebhookService {
     private final Clock clock;
     private final tn.vas.security.UrlGuard urlGuard;
 
-    public WebhookService(WebhookRepo outbox, ApiClientRepo clients, RestClient http, ObjectMapper json, Clock clock, tn.vas.security.UrlGuard urlGuard) {
+    public WebhookService(WebhookRepo outbox, ApiClientRepo clients, @org.springframework.beans.factory.annotation.Qualifier("webhookHttp") RestClient http, ObjectMapper json, Clock clock, tn.vas.security.UrlGuard urlGuard) {
         this.urlGuard = urlGuard;
         this.outbox = outbox;
         this.clients = clients;

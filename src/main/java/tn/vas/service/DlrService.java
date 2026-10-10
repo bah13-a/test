@@ -15,8 +15,11 @@ public class DlrService {
     private final WebhookService webhooks;
     private final Clock clock;
     private final RenewalOutcome renewals;
+    private final io.micrometer.core.instrument.MeterRegistry metrics;
 
-    public DlrService(MtRepo mts, MtService mtService, LedgerService ledger, WebhookService webhooks, Clock clock, RenewalOutcome renewals) {
+    public DlrService(MtRepo mts, MtService mtService, LedgerService ledger, WebhookService webhooks, Clock clock, RenewalOutcome renewals,
+                      io.micrometer.core.instrument.MeterRegistry metrics) {
+        this.metrics = metrics;
         this.renewals = renewals;
         this.mts = mts;
         this.mtService = mtService;
@@ -68,6 +71,8 @@ public class DlrService {
         if (m.getStatus() != MtStatus.SUBMITTED) return;
         m.setStatus(MtStatus.UNKNOWN);
         m.setRawStatus("DLR_TIMEOUT");
+        // signal d'exploitation : un opérateur (ou un type de message long) dont les accusés n'arrivent pas fait monter ce compteur (alerte DlrTimeoutRate)
+        metrics.counter("vas.dlr.timeout", "operator", m.getOperator().getCode(), "segments", m.getSegments() > 1 ? "multi" : "single").increment();
         m.setUpdatedAt(clock.instant());
         mts.save(m);
         mtService.record(m, MtStatus.UNKNOWN, "DLR_TIMEOUT");

@@ -1,5 +1,6 @@
 package tn.vas.web;
 
+import tn.vas.support.*;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -160,30 +161,6 @@ public class AdminController {
         users.save(u);
         audit.log("USER_UPDATE", "user:" + u.getUsername(), "roles=" + u.getRoles() + " active=" + u.isActive());
         return Map.of("id", u.getId());
-    }
-
-    // ---------------------------------------------------------------- Tableau de bord
-    @GetMapping("/dashboard")
-    @PreAuthorize(ANY)
-    public Map<String, Object> dashboard(@RequestParam(defaultValue = "24") int hours) {
-        Instant from = clock.instant().minus(Duration.ofHours(hours));
-        Map<String, Long> mo = new TreeMap<>(), mt = new TreeMap<>();
-        mos.countByOutcomeSince(from).forEach(o -> mo.put(o[0].toString(), (Long) o[1]));
-        mts.countByStatusSince(from).forEach(o -> mt.put(o[0].toString(), (Long) o[1]));
-        Map<String, Object> bill = new TreeMap<>();
-        if (hasAnyRole("SUPER_ADMIN", "FINANCE", "AUDITOR")) {
-            ledger.totalsSince(from).forEach(o -> bill.put(o[0].toString(), Map.of("gross", o[1], "partner", o[2], "provider", o[3], "events", o[4])));
-        }
-        long delivered = mt.getOrDefault("DELIVERED", 0L), finals = delivered + mt.getOrDefault("UNDELIVERABLE", 0L)
-                + mt.getOrDefault("EXPIRED", 0L) + mt.getOrDefault("REJECTED", 0L);
-        return Map.of("hours", hours, "mo", mo, "mt", mt, "billing", bill, "pending", mts.countByStatus(MtStatus.PENDING),
-                "deliveryRate", finals == 0 ? 0.0 : (double) delivered / finals,
-                "operators", operators.findAll().stream().map(o -> Map.of("code", o.getCode(), "status", o.getStatus(), "maxTps", o.getMaxTps())).toList());
-    }
-
-    private static boolean hasAnyRole(String... roles) {
-        var a = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        return a != null && a.getAuthorities().stream().anyMatch(g -> Arrays.asList(roles).contains(g.getAuthority().substring(5)));
     }
 
     // ---------------------------------------------------------------- Opérateurs, short codes
@@ -444,7 +421,7 @@ public class AdminController {
     @GetMapping("/rules")
     @PreAuthorize(ANY)
     public ResponseEntity<List<Map<String, Object>>> rules(@RequestParam(required = false) Integer page, @RequestParam(required = false) Integer size) {
-        return Paging.slice(rules.findAll().stream().map(r -> Map.<String, Object>of("id", r.getId(), "msisdn", mask(r.getMsisdn()), "type", r.getRuleType(),
+        return Paging.slice(rules.findAll().stream().map(r -> Map.<String, Object>of("id", r.getId(), "msisdn", Views.mask(r.getMsisdn()), "type", r.getRuleType(),
                 "service", r.getService() == null ? "" : r.getService().getName(), "reason", r.getReason() == null ? "" : r.getReason())).toList(), page, size);
     }
 
@@ -456,7 +433,7 @@ public class AdminController {
         var rule = new MsisdnRule();
         rule.setMsisdn(m); rule.setRuleType(r.type()); rule.setReason(r.reason()); rule.setCreatedAt(clock.instant());
         if (r.serviceId() != null) rule.setService(services.findById(r.serviceId()).orElseThrow());
-        audit.log("RULE_CREATE", "rule:" + r.type(), mask(m));
+        audit.log("RULE_CREATE", "rule:" + r.type(), Views.mask(m));
         return Map.of("id", rules.save(rule).getId());
     }
 
@@ -545,94 +522,6 @@ public class AdminController {
         return RevenueSplit.compute(gross, tax, operatorPercent, partnerPercent);
     }
 
-    // ---------------------------------------------------------------- Messages (recherche)
-    @GetMapping("/messages")
-    @PreAuthorize(ANY)
-    public ResponseEntity<List<Map<String, Object>>> messages(@RequestParam(required = false) String id, @RequestParam(required = false) String msisdn,
-                                              @RequestParam(required = false) String operator, @RequestParam(required = false) String shortCode,
-                                              @RequestParam(required = false) MtStatus status, @RequestParam(required = false) Instant from,
-                                              @RequestParam(required = false) Instant to, @RequestParam(required = false) Integer page, @RequestParam(required = false) Integer size) {
-        Specification<MtMessage> spec = Specification.where(null);
-        if (id != null && !id.isBlank()) spec = spec.and((r, q, b) -> b.equal(r.get("correlationId"), id));
-        if (msisdn != null && !msisdn.isBlank()) { String m = Optional.ofNullable(Text.normalizeMsisdn(msisdn)).orElse(msisdn); spec = spec.and((r, q, b) -> b.equal(r.get("msisdn"), m)); }
-        if (operator != null && !operator.isBlank()) spec = spec.and((r, q, b) -> b.equal(r.get("operator").get("code"), operator));
-        if (shortCode != null && !shortCode.isBlank()) spec = spec.and((r, q, b) -> b.equal(r.get("sender"), shortCode));
-        if (status != null) spec = spec.and((r, q, b) -> b.equal(r.get("status"), status));
-        if (from != null) spec = spec.and((r, q, b) -> b.greaterThanOrEqualTo(r.get("createdAt"), from));
-        if (to != null) spec = spec.and((r, q, b) -> b.lessThan(r.get("createdAt"), to));
-        boolean full = hasAnyRole("SUPER_ADMIN", "SUPPORT");
-        return Paging.of(mts.findAll(spec, Paging.req(page, size, org.springframework.data.domain.Sort.by("createdAt").descending()))
-                .map(m -> {
-                    Map<String, Object> r = new LinkedHashMap<>();
-                    r.put("id", m.getCorrelationId()); r.put("createdAt", m.getCreatedAt()); r.put("operator", m.getOperator().getCode());
-                    r.put("msisdn", full ? m.getMsisdn() : mask(m.getMsisdn())); r.put("sender", m.getSender()); r.put("status", m.getStatus());
-                    r.put("rawStatus", m.getRawStatus()); r.put("segments", m.getSegments()); r.put("attempts", m.getAttempts());
-                    r.put("content", full ? m.getContent() : "***");
-                    return r;
-                }));
-    }
-
-    // ---------------------------------------------------------------- Ledger, exports
-    private Specification<LedgerEvent> ledgerSpec(BillingStatus status, Instant from, Instant to) {
-        Specification<LedgerEvent> spec = Specification.where(null);
-        if (status != null) spec = spec.and((r, q, b) -> b.equal(r.get("billingStatus"), status));
-        if (from != null) spec = spec.and((r, q, b) -> b.greaterThanOrEqualTo(r.get("createdAt"), from));
-        if (to != null) spec = spec.and((r, q, b) -> b.lessThan(r.get("createdAt"), to));
-        return spec;
-    }
-
-    private static Map<String, Object> ledgerRow(LedgerEvent e) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("eventId", e.getEventId()); m.put("type", e.getEventType()); m.put("operator", e.getOperator().getCode());
-        m.put("service", e.getService() == null ? "" : e.getService().getName()); m.put("msisdn", mask(e.getMsisdn()));
-        m.put("gross", e.getGrossAmount()); m.put("operatorShare", e.getOperatorShare()); m.put("providerShare", e.getProviderShare());
-        m.put("partnerShare", e.getPartnerShare()); m.put("taxes", e.getTaxes()); m.put("status", e.getBillingStatus()); m.put("createdAt", e.getCreatedAt());
-        return m;
-    }
-
-    @GetMapping("/ledger")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','FINANCE','AUDITOR')")
-    public ResponseEntity<List<Map<String, Object>>> ledger(@RequestParam(required = false) BillingStatus status, @RequestParam(required = false) Instant from,
-                                                            @RequestParam(required = false) Instant to, @RequestParam(required = false) Integer page, @RequestParam(required = false) Integer size) {
-        return Paging.of(ledger.findAll(ledgerSpec(status, from, to), Paging.req(page, size, org.springframework.data.domain.Sort.by("createdAt").descending())).map(AdminController::ledgerRow));
-    }
-
-    /** Plafond d'un export en mémoire : au-delà, restreindre la période (le ledger peut compter des millions de lignes). */
-    static final int EXPORT_MAX_ROWS = 50_000;
-
-    private List<Map<String, Object>> ledgerRows(BillingStatus status, Instant from, Instant to) {
-        var spec = ledgerSpec(status, from, to);
-        if (ledger.count(spec) > EXPORT_MAX_ROWS)
-            throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "export limité à " + EXPORT_MAX_ROWS + " lignes : restreindre la période (from/to) ou le statut");
-        List<Map<String, Object>> rows = new ArrayList<>();
-        for (int p = 0; ; p++) { // lecture par pages de 2000 pour borner la mémoire de la requête
-            var page = ledger.findAll(spec, org.springframework.data.domain.PageRequest.of(p, 2000, org.springframework.data.domain.Sort.by("createdAt").descending()));
-            page.forEach(e -> rows.add(ledgerRow(e)));
-            if (!page.hasNext()) break;
-        }
-        return rows;
-    }
-
-    @GetMapping("/ledger/export")
-    @PreAuthorize(FIN)
-    public ResponseEntity<byte[]> ledgerExport(@RequestParam(defaultValue = "csv") String format, @RequestParam(required = false) BillingStatus status,
-                                               @RequestParam(required = false) Instant from, @RequestParam(required = false) Instant to) throws IOException {
-        var rows = ledgerRows(status, from, to);
-        audit.log("LEDGER_EXPORT", "ledger", format);
-        return Exports.respond(format, "ledger", "Ledger de facturation", rows);
-    }
-
-    @GetMapping("/reports/summary/export")
-    @PreAuthorize(ANY)
-    public ResponseEntity<byte[]> summaryExport(@RequestParam(defaultValue = "pdf") String format, @RequestParam(defaultValue = "24") int hours) throws IOException {
-        var d = dashboard(hours);
-        List<Map<String, Object>> rows = new ArrayList<>();
-        ((Map<?, ?>) d.get("mo")).forEach((k, v) -> rows.add(Map.of("indicateur", "MO " + k, "valeur", v)));
-        ((Map<?, ?>) d.get("mt")).forEach((k, v) -> rows.add(Map.of("indicateur", "MT " + k, "valeur", v)));
-        rows.add(Map.of("indicateur", "MT en attente", "valeur", d.get("pending")));
-        return Exports.respond(format, "synthese", "Synthèse d'activité (" + hours + " h)", rows);
-    }
-
     // ---------------------------------------------------------------- Rapprochement
     @PostMapping(value = "/reconciliation/{operatorCode}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize(FIN)
@@ -653,30 +542,6 @@ public class AdminController {
         return Map.of("batch", batch, "summary", summary);
     }
 
-    @GetMapping("/reconciliation/{batch}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','FINANCE','AUDITOR')")
-    public ResponseEntity<List<Map<String, Object>>> reconItems(@PathVariable String batch, @RequestParam(required = false) ReconResult result, @RequestParam(required = false) Integer page, @RequestParam(required = false) Integer size) {
-        var pg = Paging.req(page, size, org.springframework.data.domain.Sort.by("id"));
-        return Paging.of((result == null ? recon.findByBatchId(batch, pg) : recon.findByBatchIdAndResult(batch, result, pg)).map(i -> {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("id", i.getId()); m.put("eventId", i.getEventId()); m.put("operatorAmount", i.getOperatorAmount());
-            m.put("platformAmount", i.getPlatformAmount()); m.put("result", i.getResult()); m.put("comment", i.getComment());
-            return (Map<String, Object>) m;
-        }));
-    }
-
-    @GetMapping("/reconciliation/{batch}/export")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','FINANCE','AUDITOR')")
-    public ResponseEntity<byte[]> reconExport(@PathVariable String batch, @RequestParam(defaultValue = "csv") String format) throws IOException {
-        var all = new ArrayList<Map<String, Object>>();
-        for (int p = 0; ; p++) {
-            var pg = recon.findByBatchId(batch, org.springframework.data.domain.PageRequest.of(p, 2000, org.springframework.data.domain.Sort.by("id")));
-            pg.forEach(i -> { if (i.getResult() != ReconResult.MATCHED) { Map<String, Object> m = new LinkedHashMap<>(); m.put("eventId", i.getEventId()); m.put("operatorAmount", i.getOperatorAmount()); m.put("platformAmount", i.getPlatformAmount()); m.put("result", i.getResult()); m.put("comment", i.getComment()); all.add(m); } });
-            if (!pg.hasNext()) break;
-        }
-        return Exports.respond(format, "ecarts-" + batch, "Écarts de rapprochement " + batch, all);
-    }
-
     public record CorrectionReq(String comment, BillingStatus newStatus) {}
 
     @PatchMapping("/reconciliation/items/{id}")
@@ -687,39 +552,15 @@ public class AdminController {
         return Map.of("id", id);
     }
 
-    // ---------------------------------------------------------------- Support : consentements, abonnements, audit
-    @GetMapping("/consents")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','SUPPORT','AUDITOR')")
-    public List<Map<String, Object>> consents(@RequestParam String msisdn, @RequestParam Long serviceId) {
-        return consents.findByMsisdnAndServiceOrderByAtAsc(Optional.ofNullable(Text.normalizeMsisdn(msisdn)).orElse(msisdn), services.findById(serviceId).orElseThrow())
-                .stream().map(c -> Map.<String, Object>of("action", c.getAction(), "channel", c.getChannel(), "proof", c.getProofText() == null ? "" : c.getProofText(),
-                        "termsVersion", c.getTermsVersion() == null ? "" : c.getTermsVersion(), "at", c.getAt())).toList();
-    }
-
-    @GetMapping(value = "/consents/export", produces = "text/csv")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','SUPPORT','AUDITOR')")
-    public ResponseEntity<byte[]> consentsExport(@RequestParam String msisdn, @RequestParam Long serviceId) throws IOException {
-        audit.log("CONSENT_EXPORT", "service:" + serviceId, mask(msisdn));
-        return Exports.respond("csv", "consentements", "Preuves de consentement", consents(msisdn, serviceId));
-    }
-
     @PostMapping("/subscriptions/stop")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','SUPPORT')")
     public ResponseEntity<Void> stop(@RequestParam String msisdn, @RequestParam Long serviceId) {
         String m = Text.normalizeMsisdn(msisdn);
         if (m == null) throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "MSISDN invalide");
         subscriptionService.stop(m, services.findById(serviceId).orElseThrow());
-        audit.log("SUBSCRIPTION_STOP_SUPPORT", "service:" + serviceId, mask(m));
+        audit.log("SUBSCRIPTION_STOP_SUPPORT", "service:" + serviceId, Views.mask(m));
         return ResponseEntity.noContent().build();
     }
 
-    @GetMapping("/audit")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','AUDITOR')")
-    public ResponseEntity<List<AuditLog>> audit(@RequestParam(required = false) Integer page, @RequestParam(required = false) Integer size) {
-        return Paging.of(auditRepo.findAll(Paging.req(page, size, org.springframework.data.domain.Sort.by("id").descending())));
-    }
 
-    public static String mask(String msisdn) {
-        return msisdn == null || msisdn.length() < 6 ? msisdn : msisdn.substring(0, msisdn.length() - 5) + "*****";
-    }
 }

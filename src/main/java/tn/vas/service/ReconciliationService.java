@@ -17,8 +17,12 @@ public class ReconciliationService {
     private final LedgerRepo ledger;
     private final ReconRepo recon;
     private final AuditService audit;
+    private final BillingPeriodRepo periods;
+    private final LedgerService ledgerService;
 
-    public ReconciliationService(LedgerRepo ledger, ReconRepo recon, AuditService audit) {
+    public ReconciliationService(LedgerRepo ledger, ReconRepo recon, AuditService audit, BillingPeriodRepo periods, LedgerService ledgerService) {
+        this.periods = periods;
+        this.ledgerService = ledgerService;
         this.ledger = ledger;
         this.recon = recon;
         this.audit = audit;
@@ -74,8 +78,12 @@ public class ReconciliationService {
         item.setComment(comment);
         if (newStatus != null && item.getEventId() != null) {
             ledger.findByEventId(item.getEventId()).ifPresent(e -> {
+                if (periods.closedAt(e.getCreatedAt())) // période clôturée : figée, corriger par un ajustement (BillingService.adjust)
+                    throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT, "période clôturée : utiliser un ajustement");
+                var was = e.getBillingStatus();
                 e.setBillingStatus(newStatus);
                 ledger.save(e);
+                ledgerService.publish(e, was, newStatus);
             });
         }
         audit.log("RECONCILIATION_CORRECTION", "recon:" + itemId, comment + (newStatus == null ? "" : " -> " + newStatus));

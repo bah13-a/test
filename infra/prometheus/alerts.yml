@@ -16,3 +16,19 @@ groups:
         for: 5m
         labels: { severity: critical }
         annotations: { summary: "File MT en attente > 1000 depuis 5 min (lien opérateur ?)" }
+      - alert: DlrTimeoutRate
+        # accusés de livraison manquants : lien DLR de l'opérateur, ou messages longs dont les parties ne sont pas toutes acquittées
+        expr: sum by (operator) (increase(vas_dlr_timeout_total[1h])) > 20
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: "Plus de 20 MT sans accusé de livraison en 1 h pour {{ $labels.operator }} (les montants passent en DISPUTED)" }
+      - alert: DlrTimeoutMultipart
+        expr: sum by (operator) (increase(vas_dlr_timeout_total{segments="multi"}[1h])) > 5
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: "Messages longs sans accusé pour {{ $labels.operator }} : vérifier la gestion des accusés par partie avec l'opérateur" }
+      - alert: RedisFallbackActive
+        expr: sum(increase(vas_ratelimit_fallback_total[5m])) > 100
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "Redis indisponible : quotas API et freinage des échecs d'authentification en mode local" }

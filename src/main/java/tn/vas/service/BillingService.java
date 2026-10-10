@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import tn.vas.domain.*;
 import tn.vas.domain.Enums.*;
+import tn.vas.query.BillingQueries;
 import tn.vas.repo.Repos.*;
 
 /**
@@ -27,16 +28,17 @@ public class BillingService {
     private final ServiceRepo services;
     private final AuditService audit;
     private final Clock clock;
+    private final LedgerService ledgerService;
+    private final BillingQueries queries;
 
-    public BillingService(LedgerRepo ledger, BillingPeriodRepo periods, PayoutRepo payouts, ServiceRepo services, AuditService audit, Clock clock) {
+    public BillingService(LedgerRepo ledger, BillingPeriodRepo periods, PayoutRepo payouts, ServiceRepo services, AuditService audit, Clock clock, LedgerService ledgerService, BillingQueries queries) {
+        this.queries = queries;
+        this.ledgerService = ledgerService;
         this.ledger = ledger; this.periods = periods; this.payouts = payouts; this.services = services; this.audit = audit; this.clock = clock;
     }
 
     private static ResponseStatusException err(HttpStatus s, String m) { return new ResponseStatusException(s, m); }
 
-    private static void checkRange(Instant from, Instant to) {
-        if (from == null || to == null || !from.isBefore(to)) throw err(HttpStatus.UNPROCESSABLE_ENTITY, "période invalide : from < to requis");
-    }
 
     @Transactional
     public Map<String, Object> adjust(String eventId, String reason, String actor) {
@@ -46,9 +48,11 @@ public class BillingService {
         if (orig.getBillingStatus() == BillingStatus.REVERSED) throw err(HttpStatus.CONFLICT, "déjà remboursé");
         var now = clock.instant();
         if (!periods.closedAt(orig.getCreatedAt())) {
+            var was = orig.getBillingStatus();
             orig.setBillingStatus(BillingStatus.REVERSED);
             orig.setUpdatedAt(now);
             ledger.save(orig);
+            ledgerService.publish(orig, was, BillingStatus.REVERSED);
             audit.log("LEDGER_REVERSE", "ledger:" + eventId, reason);
             return Map.of("eventId", eventId, "mode", "REVERSED");
         }
@@ -72,13 +76,14 @@ public class BillingService {
         a.setCreatedAt(now);
         a.setUpdatedAt(now);
         ledger.save(a);
+        ledgerService.publish(a, null, BillingStatus.CHARGED);
         audit.log("LEDGER_ADJUST", "ledger:" + adjId, reason);
         return Map.of("eventId", adjId, "mode", "ADJUSTMENT");
     }
 
     @Transactional
     public BillingPeriod close(Instant from, Instant to, String actor) {
-        checkRange(from, to);
+        BillingQueries.checkRange(from, to);
         if (to.isAfter(clock.instant())) throw err(HttpStatus.UNPROCESSABLE_ENTITY, "la période n'est pas terminée");
         if (periods.overlaps(from, to)) throw err(HttpStatus.CONFLICT, "chevauche une période déjà clôturée");
         long open = ledger.countInPeriod(from, to, OPEN);
@@ -94,43 +99,14 @@ public class BillingService {
         return p;
     }
 
-    /** Relevé par service d'un partenaire : montants CHARGED (reconnus) et estimés (PENDING/ACCEPTED). */
-    public List<Map<String, Object>> statement(Partner partner, Instant from, Instant to) {
-        checkRange(from, to);
-        var svcs = services.findByPartner(partner);
-        Map<Long, Map<String, Object>> rows = new LinkedHashMap<>();
-        for (var s : svcs) {
-            Map<String, Object> r = new LinkedHashMap<>();
-            r.put("service", s.getName()); r.put("events", 0L); r.put("gross", BigDecimal.ZERO); r.put("partnerShare", BigDecimal.ZERO); r.put("estimatedPartnerShare", BigDecimal.ZERO);
-            rows.put(s.getId(), r);
-        }
-        if (!svcs.isEmpty()) for (Object[] o : ledger.statement(svcs, from, to)) {
-            var r = rows.get(((VasService) o[0]).getId());
-            var st = (BillingStatus) o[1];
-            if (st == BillingStatus.CHARGED) {
-                r.put("events", (Long) r.get("events") + (Long) o[2]);
-                r.put("gross", ((BigDecimal) r.get("gross")).add((BigDecimal) o[3]));
-                r.put("partnerShare", ((BigDecimal) r.get("partnerShare")).add((BigDecimal) o[4]));
-            } else if (st == BillingStatus.PENDING || st == BillingStatus.ACCEPTED) {
-                r.put("estimatedPartnerShare", ((BigDecimal) r.get("estimatedPartnerShare")).add((BigDecimal) o[4]));
-            }
-        }
-        List<Map<String, Object>> out = new ArrayList<>(rows.values());
-        BigDecimal g = BigDecimal.ZERO, ps = BigDecimal.ZERO, es = BigDecimal.ZERO; long ev = 0;
-        for (var r : out) { ev += (Long) r.get("events"); g = g.add((BigDecimal) r.get("gross")); ps = ps.add((BigDecimal) r.get("partnerShare")); es = es.add((BigDecimal) r.get("estimatedPartnerShare")); }
-        Map<String, Object> total = new LinkedHashMap<>();
-        total.put("service", "TOTAL"); total.put("events", ev); total.put("gross", g); total.put("partnerShare", ps); total.put("estimatedPartnerShare", es);
-        out.add(total);
-        return out;
-    }
 
     @Transactional
     public PartnerPayout createPayout(Partner partner, Instant from, Instant to, String actor) {
-        checkRange(from, to);
+        BillingQueries.checkRange(from, to);
         if (payouts.overlaps(partner, from, to)) throw err(HttpStatus.CONFLICT, "chevauche un reversement existant");
         var svcs = services.findByPartner(partner);
         if (!svcs.isEmpty() && ledger.countForServices(svcs, from, to, OPEN) > 0) throw err(HttpStatus.CONFLICT, "événements non rapprochés sur la période");
-        var total = statement(partner, from, to).stream().filter(r -> "TOTAL".equals(r.get("service"))).findFirst().orElseThrow();
+        var total = queries.statement(partner, from, to).stream().filter(r -> "TOTAL".equals(r.get("service"))).findFirst().orElseThrow();
         BigDecimal amount = (BigDecimal) total.get("partnerShare");
         if (amount.signum() <= 0) throw err(HttpStatus.UNPROCESSABLE_ENTITY, "montant à reverser nul ou négatif");
         var p = new PartnerPayout();
@@ -163,11 +139,4 @@ public class BillingService {
         return payouts.save(p);
     }
 
-    public static Map<String, Object> row(PartnerPayout p) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", p.getId()); m.put("partner", p.getPartner().getName()); m.put("partnerId", p.getPartner().getId());
-        m.put("from", p.getFromAt()); m.put("to", p.getToAt()); m.put("amount", p.getAmount()); m.put("status", p.getStatus());
-        m.put("createdBy", p.getCreatedBy()); m.put("paidBy", p.getPaidBy()); m.put("paidAt", p.getPaidAt()); m.put("reference", p.getReference());
-        return m;
-    }
 }
