@@ -38,6 +38,7 @@ public class ProductionGuard {
         if (p.jasmin() != null && p.jasmin().simulator()) e.add("vas.jasmin.simulator doit être false (le simulateur est réservé au profil dev)");
         if (p.jasmin() == null || p.jasmin().baseUrl() == null || !p.jasmin().baseUrl().startsWith("http")) e.add("JASMIN_URL doit être une URL http(s) vers l'API HTTP de Jasmin");
         if (p.jasmin() == null || weak(p.jasmin().password(), 12)) e.add("JASMIN_PASSWORD : 12 caractères minimum, sans valeur d'exemple");
+        else if (!p.jasmin().password().matches("[A-Za-z0-9_-]{12,16}")) e.add("JASMIN_PASSWORD : 12 à 16 caractères parmi A-Z a-z 0-9 _ - (Jasmin limite les mots de passe utilisateur à 16 caractères ; ex. openssl rand -hex 7)");
         if (p.callback() == null || weak(p.callback().sharedSecret(), 24)) e.add("CALLBACK_SECRET : 24 caractères minimum, sans valeur d'exemple");
         if (weak(p.tokenSecret(), 32)) e.add("TOKEN_SECRET : 32 caractères minimum, sans valeur d'exemple");
         if (!"rabbit".equals(p.queue())) e.add("vas.queue doit valoir 'rabbit' (la file mémoire n'est pas persistante)");
@@ -45,6 +46,8 @@ public class ProductionGuard {
         if (!p.mfaEnforced()) e.add("vas.mfa-enforced doit être true");
         String base = p.publicBaseUrl() == null ? "" : p.publicBaseUrl();
         if (!base.startsWith("http") || base.contains("localhost") || base.contains("127.0.0.1")) e.add("VAS_PUBLIC_BASE_URL : URL de rappel interne joignable par Jasmin (pas localhost)");
+        String h = base.replaceFirst("^https?://", "").replaceAll("[:/].*$", "");
+        if (!h.isEmpty() && !h.contains(".") && !h.equals("localhost")) e.add("VAS_PUBLIC_BASE_URL : Jasmin refuse un nom d'hôte sans point (« http://app:8080 ») ; utiliser un alias avec point (app.vas.internal) ou une IP");
         if (!datasourceUrl.startsWith("jdbc:postgresql:")) e.add("DB_URL doit être une URL PostgreSQL (pas H2) : " + datasourceUrl);
         if (p.adminUsers() != null) {
             for (var u : p.adminUsers()) {

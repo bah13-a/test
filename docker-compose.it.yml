@@ -1,0 +1,25 @@
+# Pile d'intégration (CI) : services réels + simulateur SMSC ; l'application est lancée par le job CI (profil pro) ou par `docker compose -f docker-compose.yml`.
+name: vas-it
+services:
+  postgres:
+    image: postgres:16
+    environment: { POSTGRES_DB: vas, POSTGRES_USER: vas, POSTGRES_PASSWORD: Zx9-db-real-password }
+    ports: ["5433:5432"]
+  redis:
+    image: redis:7.2.2
+    ports: ["6380:6379"]
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    ports: ["5672:5672"]
+  jasmin:
+    image: jookies/jasmin:0.10
+    environment: { REDIS_CLIENT_HOST: redis, AMQP_BROKER_HOST: rabbitmq, ENABLE_PUBLISH_SUBMIT_SM_RESP: "1" }
+    depends_on: [redis, rabbitmq]
+    ports: ["8990:8990", "1401:1401"]
+    extra_hosts: ["host.vasapp.local:host-gateway"]
+  smpp-sim:
+    image: eclipse-temurin:21-jre
+    command: ["java", "-Dloader.main=tn.vas.smppsim.SmppSimulator", "-cp", "/app/app.jar", "org.springframework.boot.loader.launch.PropertiesLauncher"]
+    environment: { SIM_SYSTEM_ID: sim, SIM_PASSWORD: sim, SIM_SMPP_PORT: "2776", SIM_CONTROL_PORT: "8081", SIM_DLR_DELAY_MS: "300" }
+    volumes: ["./target/vas-platform-1.0.0.jar:/app/app.jar:ro"]
+    ports: ["8081:8081"]

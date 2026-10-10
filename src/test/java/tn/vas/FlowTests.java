@@ -403,6 +403,42 @@ class FlowTests {
 
     @Autowired WebhookRepo webhooks;
     @Autowired AuditRepo auditRepo;
+    @Autowired MtSweeper mtSweeper;
+
+    @Test
+    void jasminSubmitAckAndTransientErrorsDoNotCorruptState() throws Exception {
+        String from = msisdn();
+        mo(UUID.randomUUID().toString(), from, "VOTE E");
+        var m = lastMt("+216" + from);
+        // ESME_ROK puis erreur transitoire : l'état reste SUBMITTED ; la livraison arrive ensuite normalement
+        for (String st : new String[]{"ESME_ROK", "ESME_RTHROTTLED"}) {
+            mvc.perform(post("/callbacks/dlr").param("secret", "test-secret").param("cid", m.getCorrelationId()).param("message_status", st)).andExpect(status().isOk());
+            assertEquals(MtStatus.SUBMITTED, mts.findByCorrelationId(m.getCorrelationId()).orElseThrow().getStatus(), st);
+        }
+        mvc.perform(post("/callbacks/dlr").param("secret", "test-secret").param("cid", m.getCorrelationId()).param("message_status", "DELIVRD")).andExpect(status().isOk());
+        assertEquals(MtStatus.DELIVERED, mts.findByCorrelationId(m.getCorrelationId()).orElseThrow().getStatus());
+    }
+
+    @Test
+    void submittedMtWithoutDlrBecomesUnknownAndBillingDisputed() throws Exception {
+        String from = msisdn();
+        mo(UUID.randomUUID().toString(), from, "VOTE D");
+        var m = lastMt("+216" + from);
+        assertEquals(MtStatus.SUBMITTED, m.getStatus());
+        // vieillit le MT au-delà du délai de DLR
+        m = mts.findByCorrelationId(m.getCorrelationId()).orElseThrow();
+        m.setUpdatedAt(Instant.now().minus(java.time.Duration.ofHours(100)));
+        mts.save(m);
+        assertTrue(mtSweeper.expireMissingDlr() >= 1);
+        m = mts.findByCorrelationId(m.getCorrelationId()).orElseThrow();
+        assertEquals(MtStatus.UNKNOWN, m.getStatus());
+        assertEquals("DLR_TIMEOUT", m.getRawStatus());
+        assertEquals(BillingStatus.DISPUTED, ledger.findByEventId("MT-" + m.getCorrelationId()).orElseThrow().getBillingStatus());
+        // un DLR tardif fait foi : il lève la contestation (DISPUTED -> CHARGED)
+        mvc.perform(post("/callbacks/dlr").param("secret", "test-secret").param("cid", m.getCorrelationId()).param("message_status", "DELIVRD")).andExpect(status().isOk());
+        assertEquals(MtStatus.DELIVERED, mts.findByCorrelationId(m.getCorrelationId()).orElseThrow().getStatus());
+        assertEquals(BillingStatus.CHARGED, ledger.findByEventId("MT-" + m.getCorrelationId()).orElseThrow().getBillingStatus());
+    }
 
     @Test
     void tokenLoginWithMfa() throws Exception {

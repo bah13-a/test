@@ -23,10 +23,14 @@ public class CallbackController {
     @RequestMapping(value = "/mo", method = {RequestMethod.POST, RequestMethod.GET})
     public ResponseEntity<String> mo(@RequestParam(value = "id", required = false) String id,
                                      @RequestParam("from") String from, @RequestParam("to") String to,
-                                     @RequestParam("content") String content,
+                                     @RequestParam(value = "content", required = false) String content,
+                                     @RequestParam(value = "binary", required = false) String binary,
+                                     @RequestParam(value = "coding", required = false) String coding,
                                      @RequestParam("origin-connector") String connector) {
         try {
-            var outcome = mo.handle(connector, from, to, content, id);
+            // Jasmin joint le contenu en hexadécimal + data_coding : seul moyen fiable pour l'arabe (UCS-2) et les accents
+            String text = tn.vas.service.MoDecoder.decode(binary, tn.vas.service.MoDecoder.parseCoding(coding), content);
+            var outcome = mo.handle(connector, from, to, text, id);
             log.info("MO {} -> {}", id, outcome);
             return ResponseEntity.ok("ACK/Jasmin");
         } catch (org.springframework.dao.DataIntegrityViolationException e) {

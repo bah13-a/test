@@ -45,6 +45,8 @@ public class SmppSimulator implements AutoCloseable {
     private volatile boolean running;
     private HttpServer control;
     public final AtomicInteger submitted = new AtomicInteger(), throttled = new AtomicInteger(), binds = new AtomicInteger();
+    /** Journal des submit_sm reçus (contrôle de l'encodage et de la segmentation par le test d'intégration). */
+    public final java.util.concurrent.ConcurrentLinkedDeque<Map<String, Object>> submitLog = new java.util.concurrent.ConcurrentLinkedDeque<>();
     private final AtomicLong windowStart = new AtomicLong();
     private final AtomicInteger windowCount = new AtomicInteger();
 
@@ -118,6 +120,16 @@ public class SmppSimulator implements AutoCloseable {
             }
             submitted.incrementAndGet();
             var id = ids.newMessageId();
+            int dc = sm.getDataCoding() & 0xff;
+            byte[] body = sm.getShortMessage();
+            boolean udh = (sm.getEsmClass() & 0x40) != 0;
+            int off = udh && body.length > 0 ? (body[0] & 0xff) + 1 : 0;
+            String text = dc == 8 ? new String(body, off, body.length - off, StandardCharsets.UTF_16BE) : new String(body, off, body.length - off, StandardCharsets.ISO_8859_1);
+            var entry = new java.util.LinkedHashMap<String, Object>();
+            entry.put("id", id.getValue()); entry.put("from", sm.getSourceAddr()); entry.put("to", sm.getDestAddress()); entry.put("dataCoding", dc);
+            entry.put("udh", udh); entry.put("bytes", body.length); entry.put("text", text); entry.put("registeredDelivery", (int) sm.getRegisteredDelivery());
+            submitLog.addFirst(entry);
+            while (submitLog.size() > 500) submitLog.removeLast();
             if (sm.getRegisteredDelivery() != 0 && dlrStatus != null) {
                 String src = sm.getSourceAddr(), dst = sm.getDestAddress();
                 timer.schedule(() -> sendDlr(session, id.getValue(), src, dst, dlrStatus), dlrDelayMs, TimeUnit.MILLISECONDS);
@@ -150,10 +162,17 @@ public class SmppSimulator implements AutoCloseable {
 
     /** Injecte un MO (deliver_sm) vers la première session liée en réception. */
     public boolean injectMo(String from, String shortCode, String text) throws Exception {
+        return injectMo(from, shortCode, text, false);
+    }
+
+    /** @param ucs2 true : data_coding 8 (UCS-2, arabe) ; false : alphabet par défaut. */
+    public boolean injectMo(String from, String shortCode, String text, boolean ucs2) throws Exception {
         for (var s : sessions) {
             if (s.getSessionState().isReceivable()) {
                 s.deliverShortMessage("CMT", TypeOfNumber.INTERNATIONAL, NumberingPlanIndicator.ISDN, from, TypeOfNumber.NATIONAL, NumberingPlanIndicator.UNKNOWN,
-                        shortCode, new ESMClass(), (byte) 0, (byte) 0, new RegisteredDelivery(0), new GeneralDataCoding(Alphabet.ALPHA_DEFAULT), text.getBytes(StandardCharsets.ISO_8859_1));
+                        shortCode, new ESMClass(), (byte) 0, (byte) 0, new RegisteredDelivery(0),
+                        new GeneralDataCoding(ucs2 ? Alphabet.ALPHA_UCS2 : Alphabet.ALPHA_DEFAULT),
+                        text.getBytes(ucs2 ? StandardCharsets.UTF_16BE : StandardCharsets.ISO_8859_1));
                 return true;
             }
         }
@@ -179,7 +198,9 @@ public class SmppSimulator implements AutoCloseable {
                 Map<String, String> q = query(ex);
                 String path = ex.getRequestURI().getPath();
                 String out = switch (path) {
-                    case "/mo" -> String.valueOf(injectMo(q.get("from"), q.get("to"), q.get("text")));
+                    case "/mo" -> String.valueOf(injectMo(q.get("from"), q.get("to"), q.get("text"), "8".equals(q.get("coding"))));
+                    case "/messages" -> new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(submitLog);
+                    case "/reset" -> { submitLog.clear(); submitted.set(0); throttled.set(0); yield "ok"; }
                     case "/drop" -> { dropLinks(); yield "dropped"; }
                     case "/tps" -> { setTps(Integer.parseInt(q.get("v"))); yield "ok"; }
                     case "/dlr" -> { setDlrStatus(DeliveryReceiptState.valueOf(q.get("status"))); yield "ok"; }

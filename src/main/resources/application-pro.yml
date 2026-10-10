@@ -29,7 +29,7 @@ vas:
   queue: rabbit
   rate-limit: redis
   mfa-enforced: true
-  public-base-url: ${VAS_PUBLIC_BASE_URL}   # URL de rappel des DLR vue par Jasmin (réseau interne), ex. http://app:8080
+  public-base-url: ${VAS_PUBLIC_BASE_URL}   # URL de rappel des DLR vue par Jasmin (réseau interne), ex. http://app.vas.internal:8080 (nom AVEC point : exigence de Jasmin)
   token-secret: ${TOKEN_SECRET}             # >= 32 caractères, identique sur toutes les instances
   jasmin:
     base-url: ${JASMIN_URL}

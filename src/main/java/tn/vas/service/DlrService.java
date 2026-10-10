@@ -32,6 +32,7 @@ public class DlrService {
         MtMessage m = mts.findByCorrelationId(correlationId).orElse(null);
         if (m == null) return false;
         MtStatus next = DlrMapper.map(rawStatus);
+        if (next == null) return false; // erreur SMSC transitoire : Jasmin réessaie, état inchangé
         if (DlrMapper.isFinal(m.getStatus()) || next == m.getStatus()) return false;
         if (m.getStatus() == MtStatus.PENDING && next == MtStatus.SUBMITTED) return false;
         m.setStatus(next);
@@ -51,5 +52,21 @@ public class DlrService {
         }
         if (DlrMapper.isFinal(next)) webhooks.enqueueDlr(m);
         return true;
+    }
+
+    /**
+     * Aucun DLR reçu dans le délai : statut UNKNOWN (final) et événement de facturation DISPUTED, à trancher au rapprochement avec le
+     * relevé opérateur. Cas typique : message concaténé dont Jasmin n'a pas pu enregistrer la correspondance du DLR.
+     */
+    @Transactional
+    public void timeout(MtMessage m) {
+        if (m.getStatus() != MtStatus.SUBMITTED) return;
+        m.setStatus(MtStatus.UNKNOWN);
+        m.setRawStatus("DLR_TIMEOUT");
+        m.setUpdatedAt(clock.instant());
+        mts.save(m);
+        mtService.record(m, MtStatus.UNKNOWN, "DLR_TIMEOUT");
+        if (m.isBillable()) ledger.transition("MT-" + m.getCorrelationId(), BillingStatus.DISPUTED);
+        webhooks.enqueueDlr(m);
     }
 }

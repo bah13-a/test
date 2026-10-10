@@ -12,7 +12,7 @@ src_ton ${SRC_TON}
 src_npi ${SRC_NPI}
 dst_ton ${DST_TON}
 dst_npi ${DST_NPI}
-elink ${ELINK}
+elink_interval ${ELINK}
 submit_throughput ${TPS}
 con_fail_retry yes
 con_fail_delay 10

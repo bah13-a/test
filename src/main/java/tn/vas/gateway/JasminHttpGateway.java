@@ -2,8 +2,6 @@ package tn.vas.gateway;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
-import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -38,18 +36,22 @@ public class JasminHttpGateway implements SmsGateway {
         form.add("password", props.jasmin().password());
         form.add("to", mt.getMsisdn().replace("+", ""));
         form.add("from", mt.getSender());
-        form.add("content", mt.getContent());
-        form.add("coding", "UCS2".equals(mt.getEncoding()) ? "8" : "0");
+        // hex-content : l'octet exact du short_message, sans dépendre de l'encodage du formulaire (constaté sur Jasmin 0.11 : avec "content" + coding=8,
+        // le texte part en UTF-8 brut et arrive illisible). UCS-2 = UTF-16BE ; sinon GSM 03.38 (un septet par octet).
+        boolean ucs2 = "UCS2".equals(mt.getEncoding());
+        byte[] bytes = ucs2 ? mt.getContent().getBytes(java.nio.charset.StandardCharsets.UTF_16BE) : tn.vas.service.MoDecoder.encodeGsm7(mt.getContent());
+        if (bytes == null) { ucs2 = true; bytes = mt.getContent().getBytes(java.nio.charset.StandardCharsets.UTF_16BE); }
+        form.add("hex-content", java.util.HexFormat.of().formatHex(bytes));
+        form.add("coding", ucs2 ? "8" : "0");
         form.add("priority", switch (mt.getPriority()) { case TRANSACTIONAL -> "3"; case CONFIRMATION -> "2"; case BULK -> "0"; });
         form.add("dlr", "yes");
         form.add("dlr-level", "3");
         form.add("dlr-method", "POST");
         form.add("dlr-url", props.publicBaseUrl() + "/callbacks/dlr?secret="
                 + URLEncoder.encode(props.callback().sharedSecret(), StandardCharsets.UTF_8) + "&cid=" + mt.getCorrelationId());
-        if (mt.getValidityUntil() != null) {
-            long min = Math.max(1, Duration.between(Instant.now(), mt.getValidityUntil()).toMinutes());
-            form.add("validity-period", Long.toString(min));
-        }
+        // Le paramètre validity-period de l'API HTTP Jasmin n'est PAS envoyé : avec Jasmin 0.11 (smpp.pdu3 0.6) il provoque
+        // « tenths of second must be one digit » et le MT est rejeté. L'expiration est appliquée par l'application avant l'envoi
+        // (MtDispatcher) et, pour les MT déjà soumis, par le délai de DLR (vas.dlr-timeout-hours).
         try {
             String body = http.post().uri(props.jasmin().baseUrl() + "/send")
                     .contentType(MediaType.APPLICATION_FORM_URLENCODED).body(form).retrieve().body(String.class);

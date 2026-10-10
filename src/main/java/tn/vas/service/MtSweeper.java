@@ -15,8 +15,12 @@ public class MtSweeper {
     private final MtQueue queue;
     private final VasProperties props;
     private final Clock clock;
+    private final DlrService dlr;
+    @org.springframework.beans.factory.annotation.Value("${vas.dlr-timeout-hours:72}")
+    private long dlrTimeoutHours;
 
-    public MtSweeper(MtRepo mts, MtQueue queue, VasProperties props, Clock clock) {
+    public MtSweeper(MtRepo mts, MtQueue queue, VasProperties props, Clock clock, DlrService dlr) {
+        this.dlr = dlr;
         this.mts = mts;
         this.queue = queue;
         this.props = props;
@@ -29,5 +33,17 @@ public class MtSweeper {
         for (var m : mts.findByStatusAndCreatedAtBefore(MtStatus.PENDING, cutoff)) {
             if (m.getUpdatedAt().isBefore(cutoff)) queue.publish(m.getCorrelationId(), m.getPriority());
         }
+    }
+
+    /** MT SUBMITTED sans DLR après vas.dlr-timeout-hours : passage en UNKNOWN + facturation contestée (voir DlrService.timeout). */
+    @Scheduled(fixedDelayString = "${vas.dlr-timeout-interval-ms:600000}")
+    public int expireMissingDlr() {
+        var cutoff = clock.instant().minus(Duration.ofHours(dlrTimeoutHours));
+        int n = 0;
+        for (var m : mts.findTop500ByStatusAndUpdatedAtBefore(MtStatus.SUBMITTED, cutoff)) {
+            dlr.timeout(m);
+            n++;
+        }
+        return n;
     }
 }

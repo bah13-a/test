@@ -44,6 +44,8 @@ services:
   app:
     build: .
     env_file: .env
+    # alias AVEC point : Jasmin refuse les noms d'hôte sans point dans l'URL de callback (http://app:8080 est rejeté)
+    networks: { default: { aliases: [app.vas.internal] } }
     environment:
       SPRING_PROFILES_ACTIVE: "${SPRING_PROFILES_ACTIVE:-pro,json}"
     depends_on:

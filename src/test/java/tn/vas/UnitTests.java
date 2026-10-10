@@ -38,6 +38,9 @@ class UnitTests {
         assertEquals(MtStatus.EXPIRED, DlrMapper.map("EXPIRED"));
         assertEquals(MtStatus.REJECTED, DlrMapper.map("REJECTD"));
         assertEquals(MtStatus.UNKNOWN, DlrMapper.map("???"));
+        assertEquals(MtStatus.SUBMITTED, DlrMapper.map("ESME_ROK"));        // accusé du SMSC (Jasmin dlr-level 3), pas une livraison
+        assertNull(DlrMapper.map("ESME_RTHROTTLED"));                         // transitoire, Jasmin réessaie : aucun changement d'état
+        assertEquals(MtStatus.REJECTED, DlrMapper.map("ESME_RINVDSTADR"));  // refus définitif
         assertTrue(DlrMapper.isFinal(MtStatus.DELIVERED));
         assertFalse(DlrMapper.isFinal(MtStatus.SUBMITTED));
     }
@@ -79,5 +82,37 @@ class UnitTests {
         assertEquals(2, rows.size());
         assertEquals(new BigDecimal("1.000"), rows.get(0).amount());
         assertEquals("CHARGED", rows.get(1).status());
+    }
+
+    @Test
+    void moDecoderHandlesUcs2GsmAndLatin1() {
+        assertEquals("vote أ", MoDecoder.decode("0076006f0074006500200623", 8, "garbage\u0000"));
+        assertEquals("VOTE A", MoDecoder.decode("564f544520" + "41", 0, null));
+        assertEquals("é€{", MoDecoder.decode("051b651b28", 0, null)); // GSM : é (0x05), € (1B 65), { (1B 28)
+        assertEquals("café", MoDecoder.decode("636166e9", 3, null)); // Latin-1
+        assertEquals("café", MoDecoder.decode("636166e9", 0, null)); // octet >= 0x80 avec data_coding 0 : Latin-1
+        assertEquals("repli", MoDecoder.decode(null, 8, "repli"));
+        assertEquals("051b651b28", java.util.HexFormat.of().formatHex(MoDecoder.encodeGsm7("é€{")));
+        assertNull(MoDecoder.encodeGsm7("ç")); // absent de GSM 03.38 : l'appelant bascule en UCS-2
+        assertEquals("é€{ vote", MoDecoder.decode(java.util.HexFormat.of().formatHex(MoDecoder.encodeGsm7("é€{ vote")), 0, null));
+        assertEquals(0, MoDecoder.parseCoding("\u0000"));
+        assertEquals(8, MoDecoder.parseCoding("\u0008"));
+        assertEquals(8, MoDecoder.parseCoding("8"));
+        assertNull(MoDecoder.parseCoding(""));
+    }
+
+    @Test
+    void rateGateSmoothsToContractualRate() throws Exception {
+        var gate = new RateGate();
+        long t0 = System.nanoTime();
+        for (int i = 0; i < 11; i++) gate.acquire("k", 20); // 20 SMS/s : 11 envois = 10 intervalles de 50 ms
+        long ms = (System.nanoTime() - t0) / 1_000_000;
+        assertTrue(ms >= 480 && ms < 800, "durée " + ms + " ms");
+        // jamais plus de tps envois dans une même seconde, y compris à cheval sur deux secondes
+        var gate2 = new RateGate();
+        java.util.List<Long> stamps = new java.util.ArrayList<>();
+        for (int i = 0; i < 9; i++) { gate2.acquire("x", 8); stamps.add(System.nanoTime()); }
+        for (int i = 0; i + 8 < stamps.size(); i++) assertTrue(stamps.get(i + 8) - stamps.get(i) >= 1_000_000_000L - 20_000_000L, "9 envois en moins d'une seconde");
+        gate.acquire("k", 0); // 0 = illimité
     }
 }

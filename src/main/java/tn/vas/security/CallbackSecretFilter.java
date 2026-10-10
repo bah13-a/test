@@ -14,6 +14,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 /** Protège /callbacks/** (appelés par Jasmin) par secret partagé, comparé en temps constant. À combiner avec allowlist IP/VPN. */
 public class CallbackSecretFilter extends OncePerRequestFilter {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(CallbackSecretFilter.class);
     private final byte[] secret;
 
     public CallbackSecretFilter(String secret) {
@@ -30,6 +31,8 @@ public class CallbackSecretFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         String given = req.getParameter("secret");
         if (given == null || !MessageDigest.isEqual(secret, given.getBytes(StandardCharsets.UTF_8))) {
+            log.warn("callback refusé : {} {} secret {} ; paramètres reçus : {} ; query présente : {}", req.getMethod(), req.getRequestURI(),
+                    given == null ? "absent" : "incorrect", java.util.Collections.list(req.getParameterNames()), req.getQueryString() != null);
             res.sendError(403, "forbidden");
             return;
         }

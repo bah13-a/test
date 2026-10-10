@@ -61,6 +61,7 @@ public final class Repos {
         List<MtMessage> findTop100ByMsisdnOrderByCreatedAtDesc(String msisdn);
         Optional<MtMessage> findBySmscMessageId(String id);
         List<MtMessage> findByStatusAndCreatedAtBefore(Enums.MtStatus s, Instant before);
+        List<MtMessage> findTop500ByStatusAndUpdatedAtBefore(Enums.MtStatus s, Instant before);
         @Query("select m.status, count(m) from MtMessage m where m.service = :s group by m.status")
         List<Object[]> countByStatus(@Param("s") VasService s);
         @Query("select m.status, count(m) from MtMessage m where m.createdAt >= :from group by m.status")

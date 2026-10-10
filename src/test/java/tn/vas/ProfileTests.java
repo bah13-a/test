@@ -23,9 +23,9 @@ class ProfileTests {
     static final String STRONG = "Zx9-very-strong-and-long-random-value-0001";
 
     static VasProperties good() {
-        return new VasProperties(new Jasmin("http://jasmin:1401", "Jasmin-pass-Zx9-0001", false), new Callback(STRONG), new Retry(5, 30),
+        return new VasProperties(new Jasmin("http://jasmin:1401", "Jasmin-Zx9-0001", false), new Callback(STRONG), new Retry(5, 30),
                 List.of(new AdminUser("admin", "{bcrypt}$2a$10$abcdefghijklmnopqrstuv", List.of("SUPER_ADMIN"))), "rabbit", "redis",
-                "http://app:8080", 30, true, STRONG, List.of(), "create-only", new Retention(365, 0, 90, 0), new Mock(false, null, 0, false, false, null));
+                "http://app.vas.internal:8080", 30, true, STRONG, List.of(), "create-only", new Retention(365, 0, 90, 0), new Mock(false, null, 0, false, false, null));
     }
 
     @Test
@@ -45,6 +45,22 @@ class ProfileTests {
                 "VAS_PUBLIC_BASE_URL", "PostgreSQL", "{bcrypt}", "vas.mock")) {
             assertTrue(all.contains(expected), "erreur attendue : " + expected + "\n" + all);
         }
+    }
+
+    @Test
+    void productionGuardRejectsJasminPasswordTooLongOrWithSymbols() {
+        var p = good();
+        for (String pw : new String[]{"Zx9-jasmin-real-pass-too-long", "Zx9/jasmin+real=1"}) {
+            var bad = new VasProperties(new Jasmin("http://jasmin:1401", pw, false), p.callback(), p.retry(), p.adminUsers(), "rabbit", "redis", p.publicBaseUrl(), 30, true, STRONG, List.of(), "create-only", p.retention(), p.mock());
+            assertTrue(ProductionGuard.validate(bad, "jdbc:postgresql://db/vas").stream().anyMatch(e -> e.contains("16 caractères")), pw);
+        }
+    }
+
+    @Test
+    void productionGuardRejectsSingleLabelHostnameForJasmin() {
+        var p = good();
+        var single = new VasProperties(p.jasmin(), p.callback(), p.retry(), p.adminUsers(), "rabbit", "redis", "http://app:8080", 30, true, STRONG, List.of(), "create-only", p.retention(), p.mock());
+        assertTrue(ProductionGuard.validate(single, "jdbc:postgresql://db/vas").stream().anyMatch(e -> e.contains("sans point")));
     }
 
     @Test

@@ -6,7 +6,13 @@
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 : "${JASMIN_PASSWORD:?}" "${CALLBACK_SECRET:?}"
-APP_URL="${APP_URL:-http://app:8080}"
+APP_URL="${APP_URL:-http://app.vas.internal:8080}"
+# Jasmin n'accepte pour l'URL de callback qu'un domaine AVEC point, localhost ou une IP (validé sur Jasmin 0.11) : "http://app:8080" est refusé.
+host="${APP_URL#*://}"; host="${host%%[:/]*}"
+if [[ "$host" != *.* && "$host" != "localhost" ]]; then
+  echo "ERREUR : APP_URL=$APP_URL - Jasmin refuse un nom d'hôte sans point. Utiliser un alias réseau avec point (ex. app.vas.internal) ou une IP." >&2
+  exit 2
+fi
 # rendu du gabarit sans dépendance (envsubst absent de certaines images)
 render() {
   local line n
@@ -29,7 +35,6 @@ ok
 morouter -a
 type DefaultRoute
 connector http(vas_app)
-rate 0.0
 ok
 JCLI
 
@@ -45,6 +50,38 @@ for op in TT ORANGE OOREDOO; do
   order=$((order + 10))
 done
 
+# jcli rejette les lignes de commentaire/vides en mode interactif : on ne garde que les commandes
+grep -vE '^[[:space:]]*(#|$)' "$out" > "$out.clean" && mv "$out.clean" "$out"
+
 if [[ "${DRY_RUN:-0}" == "1" ]]; then sed -E 's/^(password|username) .*/\1 ***/' "$out"; exit 0; fi
-# jcli est un shell telnet ; nc envoie le script puis ferme
-{ sleep 1; echo "${JCLI_USER:-jcliadmin}"; sleep 1; echo "${JCLI_PASSWORD:?JCLI_PASSWORD requis}"; sleep 1; cat "$out"; sleep 2; echo quit; } | nc "${JCLI_HOST:-jasmin}" "${JCLI_PORT:-8990}"
+# jcli est un shell interactif : on envoie une commande, puis on ATTEND le retour du prompt ("jcli : " ou "> " en mode saisie)
+# avant la suivante. Les temporisations fixes se sont révélées fragiles (validé contre Jasmin 0.11 réel).
+exec 3<>"/dev/tcp/${JCLI_HOST:-jasmin}/${JCLI_PORT:-8990}" || { echo "ERREUR : jcli injoignable" >&2; exit 1; }
+transcript=""
+wait_for() {   # $1 = suffixe attendu (regex), $2 = délai max en secondes
+  local buf="" ch
+  while IFS= read -r -t "${2:-20}" -n 1 -u 3 ch || [[ -n "$ch" ]]; do
+    buf+="$ch"
+    [[ "$buf" =~ $1$ ]] && { transcript+="$buf"; return 0; }
+    ch=""
+  done
+  transcript+="$buf"; echo "ERREUR : délai dépassé en attendant '$1' (reçu : ${buf: -120})" >&2; return 1
+}
+send_line() { printf '%s\r\n' "$1" >&3; transcript+=$'\n'"<< $1"$'\n'; }
+
+wait_for 'Authentication required\.' 10 || exit 1
+send_line "${JCLI_USER:-jcliadmin}"
+wait_for 'Password: ' 10 || exit 1
+send_line "${JCLI_PASSWORD:?JCLI_PASSWORD requis}"
+wait_for 'jcli : ' 10 || { echo "ERREUR : authentification jcli refusée" >&2; exit 1; }
+while IFS= read -r line; do
+  send_line "$line"
+  if [[ "$line" == "ok" || "$line" == persist || "$line" == smppccm\ -1* ]]; then wait_for 'jcli : ' 40 || exit 1; else wait_for '(jcli : |> )' 20 || exit 1; fi
+done < "$out"
+send_line quit
+exec 3>&-
+echo "$transcript" | tr -d '\r'
+if echo "$transcript" | grep -qE "Unknown .* key|Incorrect command|Error:"; then
+  echo "ERREUR : jcli a rejeté une commande (voir ci-dessus)" >&2
+  exit 1
+fi
