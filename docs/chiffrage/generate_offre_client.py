@@ -52,7 +52,19 @@ total_ht = labor + conting + ext_inc; tva = round(total_ht * TVA); total_ttc = t
 prod_month = sum(v for _, v in ENV); prod_year = prod_month * 12
 PENTEST = 12000; TLS = 300
 maint = round((labor + conting) * 0.18)
-y1 = total_ht + prod_year + PENTEST + TLS
+# Achats à la charge du client : (désignation, unique, annuel, quand commander, base et remarques) - estimations HT à confirmer par devis
+BUY = [("Hébergement de production en haute disponibilité (7 machines virtuelles)", 0, prod_year, "J+30 (avant mise en production)",
+        "Détail mensuel : " + "; ".join(f"{a} {tnd(b)}" for a, b in ENV) + ". Référence : 152 à 304 TND/mois par machine (hébergeur tunisien ATI, annuaire WHTop). À dimensionner par devis."),
+       ("Adresses IP publiques fixes (2) et bande passante", 0, 480, "J+30", "Estimation 20 TND/mois par adresse ; souvent incluses chez l'hébergeur."),
+       ("Stockage hors site des sauvegardes chiffrées (≈ 100 Go)", 0, 360, "J+30", "Estimation 30 TND/mois ; chez un second hébergeur ou site du client."),
+       ("Nom de domaine et certificat TLS", 0, TLS, "J+5", "Estimation ; certificat gratuit possible."),
+       ("Messagerie d'envoi des alertes (service SMTP)", 0, 360, "J+30", "Estimation 30 TND/mois ; peut être le serveur de messagerie existant du client."),
+       ("Cartes SIM de test (une par opérateur) et crédit de test", 150, 0, "J+5", "Estimation ; sert aux essais de bout en bout et à la recette opérateur."),
+       ("Audit de sécurité / test d'intrusion par un auditeur indépendant (certifié ANSI selon votre statut)", PENTEST, 0, "Semaine 6 (réservation dès J+10)",
+        "Fourchette de 6 000 à 18 000 pour un test d'application web à Tunis (blog Kolonell, source unique) ; retenu 12 000. L'obligation d'audit périodique dépend de votre statut : à vérifier.")]
+buy_once = sum(b[1] for b in BUY); buy_year = sum(b[2] for b in BUY)
+reserve = round(buy_once * 0.1) + round(buy_year * 0.1)
+y1 = total_ht + buy_once + buy_year + reserve
 
 ss = getSampleStyleSheet()
 B = ParagraphStyle("B", parent=ss["Normal"], fontName="DV", fontSize=8.6, leading=11.5)
@@ -162,14 +174,13 @@ el.append(P("6.A Inclus dans l'offre - refacturés au coût réel, sans marge", 
 ea = [["Achat", "Montant HT (TND)", "Base de calcul"]] + [[P(a), tnd(b), P(c)] for a, b, c in EXT_INCLUDED] + [["Total inclus", tnd(ext_inc), ""]]
 el.append(table(ea, [75 * mm, 30 * mm, 75 * mm], right=(1,), total=True))
 el.append(P("6.B À la charge du client - recommandés, non inclus dans le total", H2))
-envd = "; ".join(f"{a} {tnd(b)}" for a, b in ENV)
-eb = [["Achat", "Estimation HT (TND)", "Base et remarques"],
-      [P("Hébergement de production en haute disponibilité (7 machines virtuelles)"), P(f"{tnd(prod_month)} / mois, soit {tnd(prod_year)} / an"), P(f"Détail mensuel : {envd}. Référence de prix : 152 à 304 TND/mois par machine selon la taille (hébergeur tunisien ATI, annuaire WHTop). À dimensionner et confirmer par devis.")],
-      [P("Audit de sécurité / test d'intrusion par un auditeur indépendant (certifié ANSI selon votre statut)"), P(f"6 000 - 18 000 (retenu : {tnd(PENTEST)})"), P("Fourchette publiée pour un test d'application web à Tunis (blog Kolonell) ; à confirmer par devis. L'obligation d'audit périodique dépend de votre statut : à vérifier.")],
-      [P("Nom de domaine et certificat TLS"), P(f"≈ {tnd(TLS)} / an"), P("Estimation ; certificat gratuit possible.")],
-      [P("Conseil juridique : protection des données personnelles, conditions d'utilisation, durées de conservation"), P("à chiffrer par votre conseil"), P("Le prestataire fournit les paramètres techniques (conservation, consentements).")],
-      [P("Maintenance et support après la garantie"), P(f"{tnd(maint)} / an"), P("Option, voir section 8.")]]
-el.append(table(eb, [60 * mm, 42 * mm, 78 * mm]))
+eb = [["Achat", "Unique (TND)", "Annuel (TND)", "Commande", "Base et remarques"]] + [[P(d), tnd(u) if u else "-", tnd(y) if y else "-", P(w), P(r)] for d, u, y, w, r in BUY]
+eb += [[P("Réserve pour écarts de devis (10 %)"), tnd(round(buy_once * 0.1)), tnd(round(buy_year * 0.1)), "", P("Couvre l'écart entre estimations et devis réels.")],
+       ["Total achats client (HT)", tnd(buy_once + round(buy_once * 0.1)), tnd(buy_year + round(buy_year * 0.1)), "", ""]]
+el.append(table(eb, [47 * mm, 18 * mm, 20 * mm, 27 * mm, 68 * mm], right=(1, 2), total=True))
+el.append(P("Autres charges à prévoir par le client, non chiffrées ici : conseil juridique (protection des données personnelles, conditions d'utilisation, durées de conservation - à chiffrer par votre conseil ; le prestataire fournit les paramètres techniques), "
+            f"maintenance et support après la garantie (option, environ {tnd(maint)} TND/an, section 8). Aucune licence logicielle à acheter : composants libres, aucune redevance. "
+            "Un environnement de préproduction permanent après la livraison est une option (3 machines, environ 10 900 TND/an).", NOTE))
 el.append(P("6.C Définis par les opérateurs - montants communiqués par chacun", H2))
 ec = [["Élément", "Qui fixe le prix", "Remarque"],
       [P("Liaison ou VPN vers le SMSC de chaque opérateur"), P("Opérateur"), P("Condition d'accès au réseau SMPP.")],
@@ -178,8 +189,9 @@ ec = [["Élément", "Qui fixe le prix", "Remarque"],
       [P("Reversements opérateurs sur les services à valeur ajoutée"), P("Contrat opérateur"), P("Paramétrés dans la plateforme (tarifs et répartitions).")]]
 el.append(table(ec, [75 * mm, 35 * mm, 70 * mm]))
 el.append(Spacer(1, 3 * mm))
-by = [["Budget indicatif de la première année", "HT (TND)"], ["Offre commerciale (prestations + achats inclus)", tnd(total_ht)], ["Hébergement de production, 12 mois", tnd(prod_year)],
-      ["Audit de sécurité externe (valeur retenue)", tnd(PENTEST)], ["Domaine et certificat TLS", tnd(TLS)], ["Total indicatif (hors opérateurs, juridique, maintenance)", tnd(y1)]]
+by = [["Budget indicatif de la première année", "HT (TND)"], ["Offre commerciale (prestations + achats inclus, section 6.A)", tnd(total_ht)],
+      ["Achats client uniques (audit de sécurité, SIM de test)", tnd(buy_once)], ["Achats client récurrents sur 12 mois (hébergement, IP, sauvegardes, domaine, alertes)", tnd(buy_year)],
+      ["Réserve pour écarts de devis (10 %)", tnd(reserve)], ["Total indicatif (hors opérateurs, juridique, maintenance)", tnd(y1)]]
 el.append(table(by, [140 * mm, 40 * mm], right=(1,), total=True))
 
 el.append(Spacer(1, 4 * mm))
