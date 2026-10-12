@@ -103,7 +103,7 @@ el.append(table([["Prestations de réalisation (" + str(JH) + " jours-homme, 8 s
                  ["Achats externes inclus, refacturés au coût réel", f"{tnd(ext_inc)} TND"], ["TOTAL HT", f"{tnd(total_ht)} TND"], [f"TVA {int(TVA*100)} %", f"{tnd(tva)} TND"], ["TOTAL TTC", f"{tnd(total_ttc)} TND"]],
                 [120 * mm, 60 * mm], right=(1,), header=False, extra=[("BACKGROUND", (0, 3), (-1, 3), colors.HexColor("#dfe7f7")), ("FONTNAME", (0, 3), (-1, 3), "DVB"), ("FONTNAME", (0, 5), (-1, 5), "DVB")]))
 el += [Spacer(1, 4 * mm), P("Ce prix couvre l'intégralité du périmètre décrit en section 2. Les achats externes à la charge du client (hébergement de production, audit de sécurité, "
-        "liaisons opérateurs...) sont détaillés en section 6 et ne sont pas inclus dans ce total.", NOTE), PageBreak()]
+        "liaisons opérateurs...) sont détaillés dans le document distinct « Achats nécessaires » et ne sont pas inclus dans ce total.", NOTE), PageBreak()]
 
 el.append(P("1. Synthèse", H1))
 for t in [f"<b>Ce que nous livrons</b> : une plateforme de services à valeur ajoutée par SMS opérationnelle, raccordée à Tunisie Telecom, Orange Tunisie et Ooredoo Tunisie, "
@@ -111,7 +111,7 @@ for t in [f"<b>Ce que nous livrons</b> : une plateforme de services à valeur aj
           f"<b>Délai</b> : 8 semaines à compter de la commande, sous réserve de la fourniture par chaque opérateur de ses accès (VPN, comptes SMPP, jeux de tests).",
           f"<b>Prix</b> : {tnd(total_ht)} TND HT ({tnd(total_ttc)} TND TTC), forfaitaire. Taux journaliers au milieu de la fourchette du marché tunisien ; coût moyen {tnd(labor / JH)} TND par jour-homme.",
           "<b>Pourquoi ce niveau de prix</b> : la plateforme est déjà développée, testée et documentée ; vous ne payez pas sa conception mais son installation, son raccordement réel, sa recette et son transfert.",
-          f"<b>Budget global de la première année</b> (offre + achats externes recommandés) : environ {tnd(y1)} TND HT, détaillé en section 6.",
+          "<b>Achats nécessaires</b> : hébergement de production, audit de sécurité et autres achats à la charge du client sont présentés à part, dans le document « Achats nécessaires », pour ne pas les confondre avec le prix de l'offre.",
           "<b>Garantie</b> : 3 mois sur les anomalies de la livraison, comprise dans le prix ; maintenance annuelle proposée en option (section 8)."]:
     el += [P("• " + t, B), Spacer(1, 1.5 * mm)]
 
@@ -169,30 +169,12 @@ el.append(Spacer(1, 2 * mm))
 el.append(P("Un jour-homme correspond à un jour ouvré de 8 heures. Les taux sont hors taxes, frais de structure du prestataire inclus. Repères publiés pour Tunis en 2026 (développeurs et architectes) : blog Kolonell, "
             "kolonell.com/fr/blog/tjm-developpeur-application-web-tunis-2026 - source unique et indicative, aucun baromètre officiel n'existant ; les autres profils sont positionnés par comparaison.", NOTE))
 
-el.append(P("6. Achats externes", H1))
+el.append(P("6. Achats externes inclus et achats nécessaires", H1))
 el.append(P("6.A Inclus dans l'offre - refacturés au coût réel, sans marge", H2))
 ea = [["Achat", "Montant HT (TND)", "Base de calcul"]] + [[P(a), tnd(b), P(c)] for a, b, c in EXT_INCLUDED] + [["Total inclus", tnd(ext_inc), ""]]
 el.append(table(ea, [75 * mm, 30 * mm, 75 * mm], right=(1,), total=True))
-el.append(P("6.B À la charge du client - recommandés, non inclus dans le total", H2))
-eb = [["Achat", "Unique (TND)", "Annuel (TND)", "Commande", "Base et remarques"]] + [[P(d), tnd(u) if u else "-", tnd(y) if y else "-", P(w), P(r)] for d, u, y, w, r in BUY]
-eb += [[P("Réserve pour écarts de devis (10 %)"), tnd(round(buy_once * 0.1)), tnd(round(buy_year * 0.1)), "", P("Couvre l'écart entre estimations et devis réels.")],
-       ["Total achats client (HT)", tnd(buy_once + round(buy_once * 0.1)), tnd(buy_year + round(buy_year * 0.1)), "", ""]]
-el.append(table(eb, [47 * mm, 18 * mm, 20 * mm, 27 * mm, 68 * mm], right=(1, 2), total=True))
-el.append(P("Autres charges à prévoir par le client, non chiffrées ici : conseil juridique (protection des données personnelles, conditions d'utilisation, durées de conservation - à chiffrer par votre conseil ; le prestataire fournit les paramètres techniques), "
-            f"maintenance et support après la garantie (option, environ {tnd(maint)} TND/an, section 8). Aucune licence logicielle à acheter : composants libres, aucune redevance. "
-            "Un environnement de préproduction permanent après la livraison est une option (3 machines, environ 10 900 TND/an).", NOTE))
-el.append(P("6.C Définis par les opérateurs - montants communiqués par chacun", H2))
-ec = [["Élément", "Qui fixe le prix", "Remarque"],
-      [P("Liaison ou VPN vers le SMSC de chaque opérateur"), P("Opérateur"), P("Condition d'accès au réseau SMPP.")],
-      [P("Comptes SMPP, activation et loyer des numéros courts"), P("Opérateur"), P("Dépend de vos contrats d'accès.")],
-      [P("Tarifs de terminaison des SMS, SMS de test"), P("Opérateur"), P("Facturés par l'opérateur selon votre contrat.")],
-      [P("Reversements opérateurs sur les services à valeur ajoutée"), P("Contrat opérateur"), P("Paramétrés dans la plateforme (tarifs et répartitions).")]]
-el.append(table(ec, [75 * mm, 35 * mm, 70 * mm]))
-el.append(Spacer(1, 3 * mm))
-by = [["Budget indicatif de la première année", "HT (TND)"], ["Offre commerciale (prestations + achats inclus, section 6.A)", tnd(total_ht)],
-      ["Achats client uniques (audit de sécurité, SIM de test)", tnd(buy_once)], ["Achats client récurrents sur 12 mois (hébergement, IP, sauvegardes, domaine, alertes)", tnd(buy_year)],
-      ["Réserve pour écarts de devis (10 %)", tnd(reserve)], ["Total indicatif (hors opérateurs, juridique, maintenance)", tnd(y1)]]
-el.append(table(by, [140 * mm, 40 * mm], right=(1,), total=True))
+el.append(P("Les achats nécessaires à la charge du client (hébergement de production, audit de sécurité, liaisons opérateurs, etc.) ne font pas partie de ce prix : "
+            "ils sont détaillés dans le document distinct <b>« Achats nécessaires »</b> (Achats_necessaires_VAS_SMPP_Tunisie.pdf).", B))
 
 el.append(Spacer(1, 4 * mm))
 el.append(P("7. Responsabilités et prérequis", H1))
@@ -230,7 +212,7 @@ rk = [["Point", "Hypothèse ou risque", "Traitement"],
       [P("Volumétrie"), P("Jusqu'à 50 SMS/s par opérateur (150 agrégés) en exploitation."), P("Au-delà : montée en charge par ajout d'instances (option).")],
       [P("Périmètre"), P("Limité au cahier des charges V1.0 ; hors options (USSD, DCB, IVR, RCS / WhatsApp, BI, antifraude, application mobile)."), P("Chiffrables séparément sur demande.")],
       [P("Réglementaire"), P("Évolutions légales sur les services à valeur ajoutée et les données personnelles."), P("Paramètres de conservation et de consentement configurables.")],
-      [P("Exclus"), P("Hébergement de production, audit externe, liaisons opérateurs, conseil juridique, frais de contrats opérateurs."), P("Section 6.B et 6.C.")]]
+      [P("Exclus"), P("Hébergement de production, audit externe, liaisons opérateurs, conseil juridique, frais de contrats opérateurs."), P("Document « Achats nécessaires ».")]]
 el.append(table(rk, [38 * mm, 74 * mm, 68 * mm]))
 
 el.append(Spacer(1, 6 * mm))
@@ -238,3 +220,42 @@ el.append(P("10. Acceptation de l'offre", H1))
 el.append(table([["Pour le client", "Pour le prestataire"], ["Nom : \nFonction : \nDate : \nSignature et cachet :\n\n\n", "Nom : \nFonction : \nDate : \nSignature et cachet :\n\n\n"]], [90 * mm, 90 * mm]))
 doc.build(el, onFirstPage=footer, onLaterPages=footer)
 print(f"PDF : {OUT}\nJH={JH} MO={labor} aleas={conting} ext_inclus={ext_inc} HT={total_ht} TVA={tva} TTC={total_ttc} moyen={labor/JH:.0f} an1={y1} maint={maint} prod_an={prod_year}")
+
+# ---------- Document 2 : achats nécessaires (distinct de l'offre de prix) ----------
+OUT2 = sys.argv[2] if len(sys.argv) > 2 else "Achats_necessaires_VAS_SMPP_Tunisie.pdf"
+def footer2(c, d):
+    c.saveState(); c.setFont("DV", 7); c.setFillColor(colors.grey)
+    c.drawString(15 * mm, 9 * mm, "Achats nécessaires - Plateforme VAS / SMS Premium SMPP v3.4 - Confidentiel - document distinct de l'offre de prix")
+    c.drawRightString(195 * mm, 9 * mm, f"Page {d.page}"); c.restoreState()
+doc2 = SimpleDocTemplate(OUT2, pagesize=A4, leftMargin=15 * mm, rightMargin=15 * mm, topMargin=14 * mm, bottomMargin=16 * mm,
+                         title="Achats nécessaires - Plateforme VAS / SMS Premium SMPP v3.4", author="[Nom du prestataire]")
+el2 = [Spacer(1, 18 * mm), P("ACHATS NÉCESSAIRES", T), P("À la charge du client - mise en production de la plateforme VAS / SMS Premium", ParagraphStyle("x2", parent=H1, fontSize=14)),
+       Spacer(1, 8 * mm)]
+el2.append(table([["Référence", f"{REF} - document annexe à l'offre commerciale - {DATE}"], ["Nature", P("Estimations en dinars tunisiens HT, à confirmer par devis des fournisseurs ; ne font pas partie du prix de l'offre", B)],
+                  ["Qui achète", P("Le client, directement auprès des fournisseurs (le prestataire fournit les spécifications et accompagne la commande)", B)]], [45 * mm, 135 * mm], header=False))
+el2 += [Spacer(1, 6 * mm), P("Ce document est distinct de l'offre de prix. L'offre commerciale (prestations de réalisation, aléas et achats refacturés au coût réel de la préproduction) est chiffrée à "
+        f"<b>{tnd(total_ht)} TND HT</b>. Les achats ci-dessous sont à régler par le client aux fournisseurs et opérateurs ; les montants sont des estimations de marché, jamais des engagements du prestataire.", B), Spacer(1, 4 * mm)]
+el2.append(P("1. Achats à la charge du client - recommandés", H2))
+eb = [["Achat", "Unique (TND)", "Annuel (TND)", "Commande", "Base et remarques"]] + [[P(d), tnd(u) if u else "-", tnd(y) if y else "-", P(w), P(r)] for d, u, y, w, r in BUY]
+eb += [[P("Réserve pour écarts de devis (10 %)"), tnd(round(buy_once * 0.1)), tnd(round(buy_year * 0.1)), "", P("Couvre l'écart entre estimations et devis réels.")],
+       ["Total achats client (HT)", tnd(buy_once + round(buy_once * 0.1)), tnd(buy_year + round(buy_year * 0.1)), "", ""]]
+el2.append(table(eb, [47 * mm, 18 * mm, 20 * mm, 27 * mm, 68 * mm], right=(1, 2), total=True))
+el2.append(P("Autres charges à prévoir par le client, non chiffrées ici : conseil juridique (protection des données personnelles, conditions d'utilisation, durées de conservation - à chiffrer par votre conseil ; le prestataire fournit les paramètres techniques), "
+            f"maintenance et support après la garantie (option, environ {tnd(maint)} TND/an, section 8 de l'offre). Aucune licence logicielle à acheter : composants libres, aucune redevance. "
+            "Un environnement de préproduction permanent après la livraison est une option (3 machines, environ 10 900 TND/an).", NOTE))
+el2.append(P("2. Éléments définis par les opérateurs - montants communiqués par chacun", H2))
+ec = [["Élément", "Qui fixe le prix", "Remarque"],
+      [P("Liaison ou VPN vers le SMSC de chaque opérateur"), P("Opérateur"), P("Condition d'accès au réseau SMPP.")],
+      [P("Comptes SMPP, activation et loyer des numéros courts"), P("Opérateur"), P("Dépend de vos contrats d'accès.")],
+      [P("Tarifs de terminaison des SMS, SMS de test"), P("Opérateur"), P("Facturés par l'opérateur selon votre contrat.")],
+      [P("Reversements opérateurs sur les services à valeur ajoutée"), P("Contrat opérateur"), P("Paramétrés dans la plateforme (tarifs et répartitions).")]]
+el2.append(table(ec, [75 * mm, 35 * mm, 70 * mm]))
+el2.append(Spacer(1, 3 * mm))
+by = [["Budget indicatif de la première année", "HT (TND)"], ["Offre commerciale (prestations + achats inclus, section 6.A)", tnd(total_ht)],
+      ["Achats client uniques (audit de sécurité, SIM de test)", tnd(buy_once)], ["Achats client récurrents sur 12 mois (hébergement, IP, sauvegardes, domaine, alertes)", tnd(buy_year)],
+      ["Réserve pour écarts de devis (10 %)", tnd(reserve)], ["Total indicatif (hors opérateurs, juridique, maintenance)", tnd(y1)]]
+el2.append(table(by, [140 * mm, 40 * mm], right=(1,), total=True))
+el2.append(Spacer(1, 3 * mm))
+el2.append(P("Les prix de référence d'hébergement viennent d'un hébergeur tunisien (annuaire WHTop) et la fourchette d'audit d'un blog tunisien (source unique) ; les autres lignes sont des estimations du prestataire, à remplacer par les devis reçus.", NOTE))
+doc2.build(el2, onFirstPage=footer2, onLaterPages=footer2)
+print(f"PDF : {OUT2}")
