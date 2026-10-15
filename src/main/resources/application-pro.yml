@@ -88,6 +88,39 @@ vas:
     audit-days: ${RETENTION_AUDIT_DAYS:0}
     webhook-days: ${RETENTION_WEBHOOK_DAYS:90}
     consent-days: ${RETENTION_CONSENT_DAYS:0}
+  # Antifraude (seuils ajustables ; STOP et AIDE ne sont jamais bloqués)
+  fraud:
+    enabled: ${FRAUD_ENABLED:true}
+    mo-per-minute: ${FRAUD_MO_PER_MINUTE:10}
+    mo-per-hour: ${FRAUD_MO_PER_HOUR:120}
+    daily-spend-limit: ${FRAUD_DAILY_SPEND_LIMIT:30}
+    block-minutes: ${FRAUD_BLOCK_MINUTES:60}
+    spike-factor: ${FRAUD_SPIKE_FACTOR:5}
+    spike-min-volume: ${FRAUD_SPIKE_MIN_VOLUME:100}
+    spike-cron: "${FRAUD_SPIKE_CRON:0 */10 * * * *}"
+  # Paiement sur facture opérateur : disabled tant qu'aucun contrat DCB n'est signé ; http = API de chaque opérateur
+  dcb:
+    mode: ${DCB_MODE:disabled}
+    otp-ttl-seconds: ${DCB_OTP_TTL_SECONDS:300}
+    otp-max-attempts: ${DCB_OTP_MAX_ATTEMPTS:3}
+    timeout-seconds: ${DCB_TIMEOUT_SECONDS:10}
+    operators:
+      TT: { url: "${TT_DCB_URL:}", token: "${TT_DCB_TOKEN:}" }
+      ORANGE: { url: "${ORANGE_DCB_URL:}", token: "${ORANGE_DCB_TOKEN:}" }
+      OOREDOO: { url: "${OOREDOO_DCB_URL:}", token: "${OOREDOO_DCB_TOKEN:}" }
+  # WhatsApp (API Cloud de Meta) et RCS : disabled tant que les comptes ne sont pas ouverts ; live = API réelles
+  chat:
+    mode: ${CHAT_MODE:disabled}
+    whatsapp:
+      api-url: ${WHATSAPP_API_URL:https://graph.facebook.com/v21.0}
+      phone-number-id: ${WHATSAPP_PHONE_NUMBER_ID:}
+      token: ${WHATSAPP_TOKEN:}
+      app-secret: ${WHATSAPP_APP_SECRET:}
+      verify-token: ${WHATSAPP_VERIFY_TOKEN:}
+    rcs:
+      url: ${RCS_API_URL:}
+      token: ${RCS_TOKEN:}
+      webhook-secret: ${RCS_WEBHOOK_SECRET:}
   # Opérateurs réels : paramètres métier uniquement. Les identifiants SMPP restent dans Jasmin (infra/jasmin/provision.sh).
   operators:
     - code: TT

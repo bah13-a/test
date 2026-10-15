@@ -29,9 +29,11 @@ public class MtDispatcher {
     private final VasProperties props;
     private final Clock clock;
     private final RenewalOutcome renewals;
+    private final tn.vas.chat.ChatGateways chat;
 
-    public MtDispatcher(MtRepo mts, SmsGateway gateway, RateGate gate, LedgerService ledger, MtService mtService,
+    public MtDispatcher(tn.vas.chat.ChatGateways chat, MtRepo mts, SmsGateway gateway, RateGate gate, LedgerService ledger, MtService mtService,
                         PlatformTransactionManager txm, VasProperties props, Clock clock, RenewalOutcome renewals) {
+        this.chat = chat;
         this.renewals = renewals;
         this.mts = mts;
         this.gateway = gateway;
@@ -56,8 +58,9 @@ public class MtDispatcher {
             var svc = m.getService();
             if (svc != null && svc.getPartner() != null) gate.acquire("partner:" + svc.getPartner().getId(), svc.getPartner().getMaxTps());
             if (svc != null) gate.acquire("service:" + svc.getId(), svc.getMaxTps());
-            gate.acquire(m.getOperator().getCode(), m.getOperator().getMaxTps());
-            var res = gateway.send(m);
+            boolean ott = m.getChannel() == Channel.WHATSAPP || m.getChannel() == Channel.RCS;
+            if (!ott) gate.acquire(m.getOperator().getCode(), m.getOperator().getMaxTps());   // le débit SMPP de l'opérateur ne concerne que le SMS
+            var res = ott ? chat.send(m) : gateway.send(m);
             tx.executeWithoutResult(s -> {
                 MtMessage cur = mts.findByCorrelationId(correlationId).orElseThrow();
                 if (cur.getStatus() != MtStatus.PENDING) return;

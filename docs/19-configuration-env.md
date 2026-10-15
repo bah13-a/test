@@ -32,6 +32,10 @@ docker compose run --rm jasmin-provision
 | Conservation (RGPD / INPDP) | `RETENTION_MESSAGES_DAYS`, `RETENTION_CONSENT_DAYS`, `RETENTION_AUDIT_DAYS`, `RETENTION_WEBHOOK_DAYS` | Conseil juridique |
 | Haute disponibilité | `DB_SUPERUSER_PASSWORD`, `DB_REPLICATION_PASSWORD`, `RABBIT_COOKIE` (avec `infra/ha/docker-compose.ha.yml`) | Générées |
 | Lectures sur réplica (CQRS) | `READ_DB_URL`, `READ_DB_USER`, `READ_DB_PASSWORD` (vides = identifiants de la base primaire) | Optionnel |
+| Antifraude | `FRAUD_ENABLED`, `FRAUD_MO_PER_MINUTE`, `FRAUD_MO_PER_HOUR`, `FRAUD_DAILY_SPEND_LIMIT`, `FRAUD_BLOCK_MINUTES`, `FRAUD_SPIKE_*` | Politique du client (valeurs par défaut prudentes) |
+| Paiement sur facture (DCB) | `DCB_MODE`, `DCB_OTP_*`, `DCB_TIMEOUT_SECONDS`, `{OP}_DCB_URL`, `{OP}_DCB_TOKEN` | Contrat DCB de chaque opérateur |
+| WhatsApp / RCS | `CHAT_MODE`, `WHATSAPP_*`, `RCS_*` | Compte Meta Business, fournisseur RCS (voir `20-options-canaux-antifraude-bi.md`) |
+| USSD / IVR | aucun secret supplémentaire (`CALLBACK_SECRET`) ; menus saisis dans l'écran Canaux | Codes USSD et numéros IVR attribués par les opérateurs |
 | Réglages | `SESSION_TTL_MINUTES`, `PASSWORD_MIN_LENGTH`, `AUTH_THROTTLE_PER_MINUTE`, `MT_*`, `MO_DEDUP_SECONDS`, `DLR_TIMEOUT_HOURS`, `RATE_SAFETY_FACTOR`, `SUBSCRIPTION_*`, `*_CRON`, `DB_POOL_*`, `JAVA_*`, `LOG_LEVEL*` | Valeurs par défaut sûres |
 
 ## Fichiers de données (`./data`, montés en `/data`)

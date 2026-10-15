@@ -7,6 +7,16 @@ import org.springframework.web.client.RestClient;
 
 @Configuration
 public class AppConfig {
+    /** Application installable (PWA) : type MIME du manifeste (non connu par défaut du conteneur de servlets). */
+    @Bean
+    org.springframework.boot.web.server.WebServerFactoryCustomizer<org.springframework.boot.web.servlet.server.ConfigurableServletWebServerFactory> pwaMimeTypes() {
+        return f -> {
+            var m = new org.springframework.boot.web.server.MimeMappings(org.springframework.boot.web.server.MimeMappings.DEFAULT);
+            m.add("webmanifest", "application/manifest+json");
+            f.setMimeMappings(m);
+        };
+    }
+
     @Bean
     Clock clock() {
         return Clock.systemUTC();

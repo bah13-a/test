@@ -20,9 +20,11 @@ Environnement d'exécution : conteneur de développement (JDK 21, PostgreSQL 16,
 | `ProfileGuardTests` + `ProfileGuardVerifyTests` | 3 | OK | refus de démarrer sans profil, refus `dev`+`pro` |
 | `DevProfileTests` | 6 | OK | profil `dev` complet : données de démonstration, DLR automatiques → ledger `CHARGED`, un compte par rôle avec ses droits, clé API de démo, puits de webhook (signature + anti-rejeu), faux relevé opérateur |
 | `FlowTests` | 25 | OK | MO→MT→DLR→facturation, rejeu MO/DLR idempotent, mot-clé inconnu, STOP (et arabe), double opt-in, service réglementé bloqué, lien coupé + balayeur, MO arabe/UCS-2, listes noire/blanche, MFA (enrôlement, jeton, verrouillage), portail partenaire isolé + audit, rapprochement XLSX/CSV + exports PDF/XLSX/CSV, webhooks MO/DLR signés, scopes API, RBAC, approbation 4-yeux |
-| Front (`vitest`) | 13 | OK | complétude des traductions FR/AR/EN, validation accessible des formulaires, modales, tableaux, pagination, histogramme avec tableau équivalent, changement de mot de passe |
+| `ChannelsTests` | 11 | OK | options : antifraude (vitesse → blocage, STOP toujours possible, levée manuelle ; plafond de dépense), USSD (navigation, choix invalide, KEYWORD → moteur de vote → SMS facturé, CHARGE idempotent, session terminée), IVR (menu DTMF, facturation à la minute entamée une seule fois), DCB (code par SMS, idempotence, code faux / rejoué, remboursement → REVERSED, solde insuffisant, abus de codes → blocage, isolation entre clients API), WhatsApp / RCS (signature HMAC obligatoire, routage vers les mots-clés, réponse sur le même canal non facturée, statut delivered), décisionnel (indicateurs, exports, bornes), refus des simulateurs en production |
+| `EnvContractTests` + `EnvDrivenTests` | 9 | OK | contrat du `.env` unique (toute variable utilisée est déclarée et inversement, aucun secret prérempli) ; données de démarrage pilotées par l'environnement |
+| Front (`vitest`) | 17 | OK | complétude des traductions FR/AR/EN, validation accessible des formulaires, modales, tableaux, pagination, histogramme avec tableau équivalent, changement de mot de passe |
 
-Total : **108 tests (95 Java dont 1 exécuté à part sur PostgreSQL réel + 13 front), 0 échec**.
+Total : **132 tests (115 Java dont 1 exécuté à part sur PostgreSQL réel + 17 front), 0 échec**. Intégration sur la pile réelle (PostgreSQL, RabbitMQ, Redis, Jasmin, simulateur SMSC) : tout est OK, y compris USSD → vote → SMS via Jasmin et décisionnel sur PostgreSQL.
 
 ## 2. Parcours navigateur (Chromium, `frontend/e2e/smoke.mjs`) sur PostgreSQL + Redis réels
 

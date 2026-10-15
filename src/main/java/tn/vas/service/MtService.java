@@ -33,7 +33,11 @@ public class MtService {
 
     public record Request(Operator operator, VasService service, String msisdn, String sender, String content,
                           Priority priority, String clientRef, EventType billingType, Long moId, Long apiClientId,
-                          Duration validity, Long subscriptionId, Instant scheduledAt) {
+                          Duration validity, Long subscriptionId, Instant scheduledAt, Channel channel) {
+        public Request(Operator operator, VasService service, String msisdn, String sender, String content, Priority priority, String clientRef,
+                       EventType billingType, Long moId, Long apiClientId, Duration validity, Long subscriptionId, Instant scheduledAt) {
+            this(operator, service, msisdn, sender, content, priority, clientRef, billingType, moId, apiClientId, validity, subscriptionId, scheduledAt, Channel.SMS);
+        }
         /** Envoi immédiat, hors abonnement. */
         public Request(Operator operator, VasService service, String msisdn, String sender, String content, Priority priority, String clientRef,
                        EventType billingType, Long moId, Long apiClientId, Duration validity) {
@@ -62,6 +66,7 @@ public class MtService {
         m.setCreatedAt(now);
         m.setUpdatedAt(now);
         m.setSubscriptionId(r.subscriptionId());
+        m.setChannel(r.channel() == null ? Channel.SMS : r.channel());
         boolean later = r.scheduledAt() != null && r.scheduledAt().isAfter(now);
         m.setScheduledAt(later ? r.scheduledAt() : null);
         if (r.validity() != null) m.setValidityUntil((later ? r.scheduledAt() : now).plus(r.validity()));

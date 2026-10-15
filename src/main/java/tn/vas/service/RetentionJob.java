@@ -42,6 +42,11 @@ public class RetentionJob {
             out.put("mt_status_history", jdbc.update("delete from mt_status_history where mt_id in (select id from mt_message where created_at < ? and status in " + finals + ")", cut));
             out.put("mt_message", jdbc.update("delete from mt_message where created_at < ? and status in " + finals, cut));
             out.put("mo_message", jdbc.update("delete from mo_message where received_at < ?", cut));
+            // canaux et antifraude : même durée que les messages (les paiements DCB, pièces comptables, suivent le ledger : non purgés)
+            out.put("ussd_session", jdbc.update("delete from ussd_session where started_at < ?", cut));
+            out.put("ivr_call", jdbc.update("delete from ivr_call where started_at < ?", cut));
+            out.put("fraud_alert", jdbc.update("delete from fraud_alert where created_at < ? and status <> 'OPEN'", cut));
+            out.put("fraud_block", jdbc.update("delete from fraud_block where until_at < ?", cut));
         }
         if (r.consentDays() > 0) out.put("consent_record", jdbc.update("delete from consent_record where at < ?", cutoff(r.consentDays())));
         if (r.auditDays() > 0) {

@@ -170,6 +170,32 @@ def main():
         if not re.fullmatch(r"(\d{1,3}\.){3}\d{1,3}(/\d{1,2})?|[0-9a-fA-F:]+(/\d{1,3})?", c): err(f"ADMIN_ALLOWED_CIDRS : « {c} » n'est pas une adresse ou un réseau valide")
     if g("GRAFANA_BIND") == "0.0.0.0": warn("GRAFANA_BIND=0.0.0.0 : Grafana exposé sur toutes les interfaces")
 
+    # options : antifraude, DCB, WhatsApp / RCS (mêmes règles que ProductionGuard)
+    if g("FRAUD_ENABLED") not in ("true", "false"): err("FRAUD_ENABLED : true ou false")
+    elif g("FRAUD_ENABLED") == "false": warn("FRAUD_ENABLED=false : aucune protection contre les abus de facturation")
+    for k, lo, hi in (("FRAUD_MO_PER_MINUTE", 0, 1000), ("FRAUD_MO_PER_HOUR", 0, 100000), ("FRAUD_BLOCK_MINUTES", 1, 10080), ("FRAUD_SPIKE_MIN_VOLUME", 1, 10**7),
+                      ("DCB_OTP_TTL_SECONDS", 60, 1800), ("DCB_OTP_MAX_ATTEMPTS", 1, 10), ("DCB_TIMEOUT_SECONDS", 1, 60)):
+        v = g(k)
+        if not re.fullmatch(r"\d+", v) or not lo <= int(v) <= hi: err(f"{k} : entier entre {lo} et {hi} attendu (valeur : « {v} »)")
+    for k in ("FRAUD_DAILY_SPEND_LIMIT", "FRAUD_SPIKE_FACTOR"):
+        if not re.fullmatch(r"\d+(\.\d+)?", g(k)): err(f"{k} : nombre attendu")
+    if len(g("FRAUD_SPIKE_CRON").split()) != 6: err("FRAUD_SPIKE_CRON : cron Spring à 6 champs attendu")
+    if g("DCB_MODE") not in ("disabled", "http"): err("DCB_MODE : disabled ou http")
+    elif g("DCB_MODE") == "http":
+        dcb_ops = [op for op in OPS if g(f"{op}_DCB_URL")]
+        if not dcb_ops: err("DCB_MODE=http : au moins un {OP}_DCB_URL requis")
+        for op in dcb_ops:
+            if not g(f"{op}_DCB_URL").startswith("https://"): err(f"{op}_DCB_URL : https obligatoire")
+            if len(g(f"{op}_DCB_TOKEN")) < 16: err(f"{op}_DCB_TOKEN : jeton de l'opérateur requis")
+    if g("CHAT_MODE") not in ("disabled", "live"): err("CHAT_MODE : disabled ou live")
+    elif g("CHAT_MODE") == "live":
+        wa, rcs = bool(g("WHATSAPP_PHONE_NUMBER_ID")), bool(g("RCS_API_URL"))
+        if not wa and not rcs: err("CHAT_MODE=live : WHATSAPP_PHONE_NUMBER_ID ou RCS_API_URL requis")
+        if wa:
+            for k, n in (("WHATSAPP_TOKEN", 20), ("WHATSAPP_APP_SECRET", 16), ("WHATSAPP_VERIFY_TOKEN", 16)):
+                if len(g(k)) < n: err(f"{k} : {n} caractères minimum (WhatsApp actif)")
+        if rcs and (not g("RCS_API_URL").startswith("https://") or len(g("RCS_WEBHOOK_SECRET")) < 16): err("RCS : RCS_API_URL en https et RCS_WEBHOOK_SECRET (16 caractères min.) requis")
+
     for w in warnings: print("AVERTISSEMENT", w)
     for e in errors: print("ERREUR       ", e)
     print(f"\n{path} : {len(errors)} erreur(s), {len(warnings)} avertissement(s)")

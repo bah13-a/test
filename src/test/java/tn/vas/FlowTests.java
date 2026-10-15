@@ -61,6 +61,7 @@ class FlowTests {
 
     @BeforeEach
     void setup() {
+        tn.vas.security.MsisdnCrypto.configure("test-data-key-0123456789abcdef0123456789abcdef"); // clé statique : un autre contexte Spring (profil dev) a pu la changer
         user("admin", "SUPER_ADMIN", null);
         user("finance", "FINANCE", null);
         user("finance2", "FINANCE", null);

@@ -13,6 +13,7 @@ import static tn.vas.domain.Enums.*;
 @Setter
 public class MtMessage {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
+    @Enumerated(EnumType.STRING) private Channel channel = Channel.SMS;
     private String correlationId;
     private String clientRef;
     @ManyToOne(optional=false) private Operator operator;

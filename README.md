@@ -53,7 +53,7 @@ Provisionnement Jasmin : `infra/jasmin/provision.sh` (variables `TT_*`, `ORANGE_
 | **E** Back-office | React (FR/AR/EN, RTL, responsive) : tableau de bord, campagnes, facturation, opérateurs, short codes, services/mots-clés/réponses, partenaires, tarifs, messages, ledger, rapprochement, listes, support/consentements, utilisateurs, clients API, audit, MFA ; 7 rôles RBAC ; exports |
 | **F** Portail partenaire | rôle `PARTNER` isolé : volumes, taux de livraison, résultats par contenu, montants estimés vs rapprochés, exports |
 | **G** HA / supervision | métriques Prometheus + dashboard Grafana + alertes ; logs JSON + Loki ; topologie HA de référence ; sauvegarde GPG, restauration et test de restauration scriptés **et exécutés** |
-| **H** Documentation | `docs/` : HLD, LLD, moteurs/facturation/comptes (16), architecture CQRS (17), points techniques traités (18), configuration par un seul `.env` (19), guides admin/NOC/utilisateur, PRA, rapport de sécurité, dictionnaire de données, licences, formation/PV, matrice de recette, rapport de tests, fiche opérateur, OpenAPI |
+| **H** Documentation | `docs/` : HLD, LLD, moteurs/facturation/comptes (16), architecture CQRS (17), points techniques traités (18), configuration par un seul `.env` (19), options USSD / IVR / DCB / WhatsApp / RCS / antifraude / BI / application mobile (20), guides admin/NOC/utilisateur, PRA, rapport de sécurité, dictionnaire de données, licences, formation/PV, matrice de recette, rapport de tests, fiche opérateur, OpenAPI |
 
 Architecture **CQRS** (côté requête sur modèles de lecture et réplica optionnel, règles vérifiées par ArchUnit) ; rotation de clé (`Rekey`), freinage des échecs d'authentification, anti-SSRF au niveau de la connexion.
 

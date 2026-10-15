@@ -37,11 +37,13 @@ public class MoService {
     private final ContentService content;
     private final RenewalOutcome renewals;
     private final org.springframework.context.ApplicationEventPublisher events;
+    private final tn.vas.fraud.FraudService fraud;
 
-    public MoService(OperatorRepo operators, ShortCodeRepo shortCodes, KeywordRepo keywords, MoRepo mos,
+    public MoService(tn.vas.fraud.FraudService fraud, OperatorRepo operators, ShortCodeRepo shortCodes, KeywordRepo keywords, MoRepo mos,
                      SubscriptionRepo subs, ConsentRepo consents, MtService mt, AuditService audit,
                      VasProperties props, Clock clock, io.micrometer.core.instrument.MeterRegistry metrics, org.springframework.context.ApplicationEventPublisher events,
                      ReplyRepo replies, WebhookService webhooks, RuleRepo rules, VoteService vote, QuizService quiz, ContentService content, RenewalOutcome renewals) {
+        this.fraud = fraud;
         this.events = events;
         this.renewals = renewals;
         this.rules = rules;
@@ -65,6 +67,12 @@ public class MoService {
 
     @Transactional
     public MoOutcome handle(String connector, String from, String to, String content, String operatorMsgId) {
+        return handle(connector, from, to, content, operatorMsgId, Channel.SMS);
+    }
+
+    /** MO reçu sur un canal (SMS, USSD, IVR, WhatsApp, RCS) : mêmes règles ; la réponse part sur le même canal de messagerie (SMS pour USSD / IVR). */
+    @Transactional
+    public MoOutcome handle(String connector, String from, String to, String content, String operatorMsgId, Channel channel) {
         Operator op = operators.findByJasminConnector(connector == null ? null : connector.replaceFirst("_[2-9]$", "")) // liaisons secondaires : smppc_tt_2 -> smppc_tt
                 .or(() -> operators.findByCode(connector == null ? "" : connector.toUpperCase(Locale.ROOT)))
                 .orElseThrow(() -> new IllegalArgumentException("Opérateur/connecteur inconnu : " + connector));
@@ -89,6 +97,7 @@ public class MoService {
         mo.setShortCode(to);
         mo.setContent(text.length() > 1000 ? text.substring(0, 1000) : text);
         mo.setReceivedAt(now);
+        mo.setChannel(channel == null ? Channel.SMS : channel);
 
         ShortCode sc = shortCodes.findByNumberAndOperator(to, op).orElse(null);
         String[] tokens = text.isEmpty() ? new String[0] : text.split("\\s+");
@@ -101,6 +110,8 @@ public class MoService {
             outcome = stop(mo, sc, tokens);
         } else if (HELP_WORDS.contains(first)) {
             outcome = help(mo, sc, tokens);
+        } else if (fraud.rejectMo(msisdn, null)) {
+            outcome = MoOutcome.FRAUD;   // STOP et AIDE restent toujours possibles (ci-dessus) ; le reste est refusé pendant le blocage
         } else if (YES_WORDS.contains(first) && confirmPending(mo, sc)) {
             outcome = MoOutcome.ROUTED;
         } else if (keywords.findByShortCodeAndWord(sc, first).isEmpty() && quiz.active(msisdn, sc) != null) {
@@ -143,6 +154,10 @@ public class MoService {
         if (svc.getMaxActionsPerMsisdn() > 0 && mos.countByServiceAndMsisdnAndOutcome(svc, mo.getMsisdn(), MoOutcome.ROUTED)
                 >= svc.getMaxActionsPerMsisdn()) {
             reply(mo, svc, text(svc, Messages.LIMIT, svc.getReplyLimit(), mo), null);
+            return MoOutcome.LIMIT_REACHED;
+        }
+        if (!fraud.canSpendFor(mo.getMsisdn(), svc, svc.getType() == ServiceType.SUBSCRIPTION ? EventType.SUBSCRIPTION : EventType.MT)) {
+            reply(mo, svc, text(svc, Messages.LIMIT, svc.getReplyLimit(), mo), null);   // plafond de dépense journalier atteint
             return MoOutcome.LIMIT_REACHED;
         }
         if (svc.getType() == ServiceType.SUBSCRIPTION) {
@@ -200,7 +215,7 @@ public class MoService {
             reply(mo, svc, text(svc, Messages.ALREADY, null, mo), null);
             return;
         }
-        consent(mo.getMsisdn(), svc, "OPT_IN_REQUEST", "SMS", text);
+        consent(mo.getMsisdn(), svc, "OPT_IN_REQUEST", mo.getChannel().name(), text);
         if (svc.getConsentMode() == ConsentMode.DOUBLE_OPT_IN) {
             sub.setStatus(SubStatus.PENDING_CONFIRMATION);
             subs.save(sub);
@@ -215,7 +230,7 @@ public class MoService {
         if (pending.isEmpty()) return false;
         var s = pending.get(0);
         mo.setService(s.getService());
-        consent(mo.getMsisdn(), s.getService(), "OPT_IN_CONFIRMED", "SMS", mo.getContent());
+        consent(mo.getMsisdn(), s.getService(), "OPT_IN_CONFIRMED", mo.getChannel().name(), mo.getContent());
         activate(s, mo, s.getService(), mo.getContent());
         return true;
     }
@@ -228,7 +243,7 @@ public class MoService {
         sub.setNextRenewalAt(now.plus(Duration.ofDays(renewals.renewalDays())));
         sub.setRenewalFailures(0);
         subs.save(sub);
-        consent(mo.getMsisdn(), svc, "ACTIVATED", "SMS", proof);
+        consent(mo.getMsisdn(), svc, "ACTIVATED", mo.getChannel().name(), proof);
         reply(mo, svc, text(svc, Messages.SUB_OK, svc.getReplyOk(), mo), EventType.SUBSCRIPTION);
     }
 
@@ -244,7 +259,7 @@ public class MoService {
             s.setStoppedAt(clock.instant());
             s.setNextRenewalAt(null); // blocage immédiat de tout renouvellement
             subs.save(s);
-            consent(mo.getMsisdn(), s.getService(), "STOPPED", "SMS", mo.getContent());
+            consent(mo.getMsisdn(), s.getService(), "STOPPED", mo.getChannel().name(), mo.getContent());
             mo.setService(s.getService());
             reply(mo, s.getService(), text(s.getService(), Messages.STOP, s.getService().getReplyStop(), mo), null);
         }
@@ -277,9 +292,12 @@ public class MoService {
             if (mo.getOutcome() == null) mo.setOutcome(MoOutcome.ROUTED);
             mos.save(mo);
         }
+        // messagerie OTT (WhatsApp, RCS) : réponse sur le même canal, jamais facturée sur la facture opérateur ; USSD / IVR : réponse par SMS
+        Channel out = mo.getChannel() == Channel.WHATSAPP || mo.getChannel() == Channel.RCS ? mo.getChannel() : Channel.SMS;
+        EventType bill = out == Channel.SMS ? billing : null;
         mt.submit(new MtService.Request(mo.getOperator(), svc, mo.getMsisdn(), mo.getShortCode(), text,
-                billing == null ? Priority.TRANSACTIONAL : Priority.CONFIRMATION, null, billing, mo.getId(), null,
-                Duration.ofHours(24)));
+                bill == null ? Priority.TRANSACTIONAL : Priority.CONFIRMATION, null, bill, mo.getId(), null,
+                Duration.ofHours(24), null, null, out));
     }
 
     /** Texte de réponse : surcharge par service+langue, puis champ legacy du service (langue par défaut), puis catalogue système. */

@@ -27,6 +27,7 @@ public class ProductionGuard {
         long ttl = Long.parseLong(env.getProperty("vas.session-ttl-minutes", "30"));
         if (ttl < 5 || ttl > 480) errors.add("SESSION_TTL_MINUTES : entre 5 et 480");
         if (weak(env.getProperty("vas.data-key"), 32)) errors.add("DATA_KEY : 32 caractères minimum, sans valeur d'exemple (chiffrement des numéros ; à sauvegarder hors serveur)");
+        errors.addAll(validateOptions(env));
         validateWarnings(p).forEach(w -> log.warn("[pro] {}", w));
         if (!errors.isEmpty()) {
             throw new IllegalStateException("Configuration 'pro' invalide :\n - " + String.join("\n - ", errors));
@@ -65,6 +66,35 @@ public class ProductionGuard {
                 e.add("ADMIN_PASSWORD_HASH est requis pour créer le premier SUPER_ADMIN");
         }
         if (p.mock() != null && (p.mock().seed() || p.mock().autoDlr() || p.mock().demoTraffic())) e.add("vas.mock.* actif : réservé au profil dev");
+        return e;
+    }
+
+    /** Options (DCB, WhatsApp / RCS) : jamais de simulateur en production ; un mode actif exige ses paramètres. */
+    public static List<String> validateOptions(Environment env) {
+        List<String> e = new ArrayList<>();
+        String dcb = env.getProperty("vas.dcb.mode", "disabled");
+        if (!dcb.equals("disabled") && !dcb.equals("http")) e.add("DCB_MODE : disabled ou http (le simulateur de paiement est réservé au profil dev)");
+        if (dcb.equals("http")) {
+            boolean any = false;
+            for (String op : List.of("TT", "ORANGE", "OOREDOO")) {
+                String url = env.getProperty("vas.dcb.operators." + op + ".url", "");
+                if (url.isBlank()) continue;
+                any = true;
+                if (!url.startsWith("https://")) e.add(op + "_DCB_URL : https obligatoire");
+                if (weak(env.getProperty("vas.dcb.operators." + op + ".token"), 16)) e.add(op + "_DCB_TOKEN : jeton fourni par l'opérateur requis");
+            }
+            if (!any) e.add("DCB_MODE=http : au moins un {OP}_DCB_URL requis");
+        }
+        String chat = env.getProperty("vas.chat.mode", "disabled");
+        if (!chat.equals("disabled") && !chat.equals("live")) e.add("CHAT_MODE : disabled ou live (le simulateur WhatsApp / RCS est réservé au profil dev)");
+        if (chat.equals("live")) {
+            boolean wa = !env.getProperty("vas.chat.whatsapp.phone-number-id", "").isBlank(), rcs = !env.getProperty("vas.chat.rcs.url", "").isBlank();
+            if (!wa && !rcs) e.add("CHAT_MODE=live : WHATSAPP_PHONE_NUMBER_ID ou RCS_API_URL requis");
+            if (wa && (weak(env.getProperty("vas.chat.whatsapp.token"), 20) || weak(env.getProperty("vas.chat.whatsapp.app-secret"), 16) || weak(env.getProperty("vas.chat.whatsapp.verify-token"), 16)))
+                e.add("WhatsApp : WHATSAPP_TOKEN, WHATSAPP_APP_SECRET et WHATSAPP_VERIFY_TOKEN (16 caractères min.) requis - signature des webhooks obligatoire");
+            if (rcs && (!env.getProperty("vas.chat.rcs.url", "").startsWith("https://") || weak(env.getProperty("vas.chat.rcs.webhook-secret"), 16)))
+                e.add("RCS : RCS_API_URL en https et RCS_WEBHOOK_SECRET (16 caractères min.) requis");
+        }
         return e;
     }
 

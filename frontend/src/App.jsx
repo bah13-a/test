@@ -7,6 +7,7 @@ import { Flash, ConfirmProvider } from './ui.jsx';
 import { Campaigns } from './engines.jsx';
 import { Billing } from './billing.jsx';
 import { Routing } from './routing.jsx';
+import { Fraud, Analytics, Channels, Dcb, InstallButton } from './options.jsx';
 
 const has = (me, ...roles) => roles.some((r) => me.roles.includes(r));
 
@@ -24,6 +25,10 @@ function menu(me) {
   if (has(me, 'SUPER_ADMIN', 'FINANCE', 'AUDITOR')) m.push(['ledger', 'ledger', () => <P.Ledger />]);
   if (has(me, 'SUPER_ADMIN', 'FINANCE', 'AUDITOR')) m.push(['billing', 'billing', () => <Billing canWrite={has(me, 'SUPER_ADMIN', 'FINANCE')} />]);
   if (has(me, 'SUPER_ADMIN', 'FINANCE', 'AUDITOR')) m.push(['reconciliation', 'reconciliation', () => <P.Reconciliation />]);
+  if (has(me, 'SUPER_ADMIN', 'FINANCE', 'VAS_MANAGER', 'AUDITOR')) m.push(['analytics', 'analytics', () => <Analytics />]);
+  if (has(me, 'SUPER_ADMIN', 'NOC', 'VAS_MANAGER', 'SUPPORT', 'AUDITOR')) m.push(['channels', 'channels', () => <Channels canWrite={has(me, 'SUPER_ADMIN', 'VAS_MANAGER')} />]);
+  if (has(me, 'SUPER_ADMIN', 'FINANCE', 'AUDITOR', 'SUPPORT')) m.push(['dcb', 'dcb', () => <Dcb canRefund={has(me, 'SUPER_ADMIN', 'FINANCE')} />]);
+  if (has(me, 'SUPER_ADMIN', 'NOC', 'VAS_MANAGER', 'AUDITOR')) m.push(['fraud', 'fraud', () => <Fraud canWrite={has(me, 'SUPER_ADMIN', 'NOC', 'VAS_MANAGER')} />]);
   if (has(me, 'SUPER_ADMIN', 'VAS_MANAGER', 'SUPPORT')) m.push(['rules', 'rules', () => <P.Rules />]);
   if (has(me, 'SUPER_ADMIN', 'SUPPORT', 'AUDITOR')) m.push(['support', 'support', () => <P.Support />]);
   if (has(me, 'SUPER_ADMIN')) { m.push(['users', 'users', () => <P.Users />]); m.push(['apiClients', 'apiClients', () => <P.ApiClients />]); }
@@ -66,6 +71,7 @@ export default function App() {
     <header>
       <b>{t('app')}</b>
       <select aria-label={t('language')} value={getLang()} onChange={(e) => changeLang(e.target.value)}>{Object.entries(LANGS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+      <InstallButton />
       {me && <><span className="muted">{me.username} ({me.roles.join(', ')})</span><button className="btn sm" onClick={() => { clearCreds(); setMe(null); }}>{t('logout')}</button></>}
     </header>
   );

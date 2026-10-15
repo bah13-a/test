@@ -25,7 +25,8 @@ public final class Rekey {
             new String[]{"mo_message", "msisdn"}, new String[]{"mt_message", "msisdn"}, new String[]{"subscription", "msisdn"},
             new String[]{"consent_record", "msisdn"}, new String[]{"ledger_event", "msisdn"}, new String[]{"msisdn_rule", "msisdn"},
             new String[]{"quiz_progress", "msisdn"}, new String[]{"content_token", "msisdn"}, new String[]{"vote_ballot", "msisdn"},
-            new String[]{"ported_number", "msisdn"});
+            new String[]{"ported_number", "msisdn"}, new String[]{"fraud_alert", "msisdn"}, new String[]{"fraud_block", "msisdn"},
+            new String[]{"ussd_session", "msisdn"}, new String[]{"ivr_call", "msisdn"}, new String[]{"dcb_transaction", "msisdn"});
 
     public record Result(long rekeyed, long encryptedPlain, long alreadyNew, long failed) {
         public Result plus(Result o) { return new Result(rekeyed + o.rekeyed, encryptedPlain + o.encryptedPlain, alreadyNew + o.alreadyNew, failed + o.failed); }

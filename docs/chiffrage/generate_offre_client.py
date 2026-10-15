@@ -37,6 +37,9 @@ LOTS = [
  ("9", "Revue de sécurité et durcissement", dict(ARCHI=1, SDEV=2, DEVOPS=2), {6, 7}, "Revue des configurations de production, des accès et des secrets, rotation des clés, préparation de l'audit externe (périmètre, comptes de test).", "Rapport de revue, check-list de durcissement"),
  ("10", "Formation, documentation, transfert", dict(SDEV=1, DEVOPS=1, QA=1, PM=2), {7, 8}, "Deux jours de formation (exploitation, support, finance), documentation tenue à jour, procédures d'exploitation, transfert des accès et des secrets.", "Supports de formation, PV de transfert"),
  ("11", "Mise en production et suivi renforcé", dict(SDEV=4, DEVOPS=4, PM=1), {7, 8}, "Bascule en production, surveillance rapprochée pendant deux semaines, correction à chaud, point de clôture.", "Production stable, PV de mise en production"),
+ ("13", "Options : USSD, IVR, DCB, WhatsApp / RCS, antifraude, BI, application mobile", dict(SDEV=12, DEV=3, DEVOPS=3, QA=8, UX=2), {5, 6, 7, 8},
+  "Modules déjà développés et testés : raccordement à la passerelle USSD de chaque opérateur et paramétrage des menus ; installation du serveur vocal (Asterisk, pont fourni) et des voix ; adaptation de l'adaptateur de paiement à l'API DCB de chaque opérateur ; compte WhatsApp Business / agent RCS et webhooks signés ; calibrage des seuils antifraude ; tableaux de bord décisionnels avec la finance ; application mobile installable aux couleurs du client ; recette de chaque option disponible.",
+  "PV de recette par option activée"),
  ("12", "Pilotage de projet", dict(PM=6), set(range(1, 9)), "Comité hebdomadaire, suivi des risques et des dépendances opérateurs, rapport d'avancement.", "Comptes rendus hebdomadaires"),
 ]
 EXT_INCLUDED = [("Environnement de préproduction hébergé : 3 machines virtuelles pendant 2 mois", 3 * 304 * 2, "Référence : 304 TND/mois par machine de taille intermédiaire (tarif public d'un hébergeur tunisien) - refacturé au coût réel"),
@@ -59,6 +62,7 @@ BUY = [("Hébergement de production en haute disponibilité (7 machines virtuell
        ("Stockage hors site des sauvegardes chiffrées (≈ 100 Go)", 0, 360, "J+30", "Estimation 30 TND/mois ; chez un second hébergeur ou site du client."),
        ("Nom de domaine et certificat TLS", 0, TLS, "J+5", "Estimation ; certificat gratuit possible."),
        ("Messagerie d'envoi des alertes (service SMTP)", 0, 360, "J+30", "Estimation 30 TND/mois ; peut être le serveur de messagerie existant du client."),
+       ("Serveur vocal IVR (Asterisk) : 1 machine virtuelle", 0, 152 * 12, "Semaine 5 (si IVR)", "Référence 152 TND/mois (petite machine, même hébergeur) ; uniquement si l'option IVR est activée."),
        ("Cartes SIM de test (une par opérateur) et crédit de test", 150, 0, "J+5", "Estimation ; sert aux essais de bout en bout et à la recette opérateur."),
        ("Audit de sécurité / test d'intrusion par un auditeur indépendant (certifié ANSI selon votre statut)", PENTEST, 0, "Semaine 6 (réservation dès J+10)",
         "Fourchette de 6 000 à 18 000 pour un test d'application web à Tunis (blog Kolonell, source unique) ; retenu 12 000. L'obligation d'audit périodique dépend de votre statut : à vérifier.")]
@@ -124,7 +128,8 @@ fn = [["Domaine", "Contenu livré"],
       [P("Back-office et portail"), P("18 écrans en français, arabe (écriture de droite à gauche) et anglais, 7 rôles, portail partenaire isolé, exports PDF / Excel / CSV, conformité d'accessibilité WCAG 2.1 AA vérifiée automatiquement.")],
       [P("Sécurité"), P("Authentification à deux facteurs pour les rôles sensibles, sessions révocables, numéros de téléphone chiffrés en base avec outil de rotation de clé, journal d'audit non modifiable, freinage des tentatives d'authentification, séparation lecture / écriture (architecture CQRS) avec réplica optionnel.")],
       [P("Exploitation"), P("Supervision (métriques, tableaux de bord, alertes), journaux centralisés, sauvegardes chiffrées avec test de restauration, topologie de haute disponibilité de référence, scripts de déploiement.")],
-      [P("Qualité"), P("108 tests automatisés, scénario d'intégration de bout en bout sur la pile réelle (PostgreSQL, Redis, RabbitMQ, Jasmin), mesures de performance (150 réceptions/s, 186 requêtes API/s sur une instance).")]]
+      [P("Options intégrées"), P("USSD (menus interactifs par code *xxx#, session, facturation), serveur vocal IVR (menus DTMF, facturation à la minute, pont Asterisk), paiement sur facture opérateur DCB (code à usage unique, remboursement), WhatsApp et RCS (mêmes mots-clés et services, webhooks signés), antifraude (vitesse, plafond de dépense, pics, blocages), décisionnel (chiffre d'affaires, ARPU, attrition, volumes par canal), application mobile installable (PWA).")],
+      [P("Qualité"), P("132 tests automatisés (115 serveur, 17 interface), scénario d'intégration de bout en bout sur la pile réelle (PostgreSQL, Redis, RabbitMQ, Jasmin), mesures de performance (150 réceptions/s, 186 requêtes API/s sur une instance).")]]
 el.append(table(fn, [35 * mm, 145 * mm]))
 el.append(Spacer(1, 2 * mm))
 el.append(P("<b>Limite à connaître</b> : la plateforme a été validée de bout en bout contre un simulateur d'opérateur, pas encore contre les réseaux réels. C'est précisément l'objet des lots 3 à 5. "
@@ -186,7 +191,8 @@ ni = [["Élément non inclus", "Qui en a la charge", "Détail ou suite"],
       [P("Préproduction permanente après la livraison (la préproduction du projet est incluse en 6.A)"), P("Client, option"), P("Environ 10 900 TND/an (3 machines).")],
       [P("Maintenance et support après la garantie de 3 mois"), P("Option"), P(f"Environ {tnd(maint)} TND/an, section 8.")],
       [P("Exploitation de la production après le suivi renforcé de 2 semaines"), P("Client (formation incluse)"), P("Reprise possible via la maintenance.")],
-      [P("Options hors périmètre : USSD, DCB, IVR, RCS / WhatsApp, BI, antifraude, application mobile"), P("Option"), P("Chiffrables séparément sur demande.")],
+      [P("Contrats et frais propres aux options : code USSD, contrat DCB, compte WhatsApp Business (frais de conversation Meta), agent RCS, numéros IVR surtaxés et trunk SIP"), P("Client, opérateurs, Meta"), P("Document « Achats nécessaires ». Une option sans contrat reste désactivée, sans effet sur le prix.")],
+      [P("Évolutions au-delà des options livrées : application mobile native (stores), BI externe (entrepôt de données), antifraude par apprentissage automatique"), P("Option"), P("Chiffrables séparément sur demande.")],
       [P("Évolutions hors cahier des charges V1.0, et capacités au-delà de 50 SMS/s par opérateur"), P("Avenant"), P(f"Au taux moyen de l'offre ({tnd(labor / JH)} TND/jour-homme).")],
       [P("Frais de contrats opérateurs et taxes réglementaires éventuelles"), P("Client"), P("Selon vos contrats et votre statut.")]]
 el.append(table(ni, [88 * mm, 38 * mm, 54 * mm]))
@@ -225,7 +231,8 @@ rk = [["Point", "Hypothèse ou risque", "Traitement"],
       [P("Formats opérateurs"), P("Accusés et relevés pouvant différer du standard."), P("Adaptations incluses (lot 6) ; mappings paramétrables.")],
       [P("Messages longs"), P("Accusé final parfois perdu selon la passerelle."), P("Supervision et alertes fournies ; qualification en recette.")],
       [P("Volumétrie"), P("Jusqu'à 50 SMS/s par opérateur (150 agrégés) en exploitation."), P("Au-delà : montée en charge par ajout d'instances (option).")],
-      [P("Périmètre"), P("Limité au cahier des charges V1.0 ; hors options (USSD, DCB, IVR, RCS / WhatsApp, BI, antifraude, application mobile)."), P("Chiffrables séparément sur demande.")],
+      [P("Périmètre"), P("Cahier des charges V1.0 et options du lot 13 (USSD, IVR, DCB, WhatsApp / RCS, antifraude, BI, application mobile)."), P("Chaque option est activée et recettée dès que son contrat (opérateur, Meta, fournisseur RCS) est disponible.")],
+      [P("Options et contrats"), P("Codes USSD, contrats DCB, comptes WhatsApp / RCS et numéros IVR dépendent de tiers ; délais d'obtention souvent supérieurs à 8 semaines."), P("Recette de l'option à la mise à disposition du contrat, sans surcoût, dans les 3 mois suivant la mise en production.")],
       [P("Réglementaire"), P("Évolutions légales sur les services à valeur ajoutée et les données personnelles."), P("Paramètres de conservation et de consentement configurables.")],
       [P("Exclus"), P("Hébergement de production, audit externe, liaisons opérateurs, conseil juridique, frais de contrats opérateurs."), P("Document « Achats nécessaires ».")]]
 el.append(table(rk, [38 * mm, 74 * mm, 68 * mm]))
@@ -263,7 +270,11 @@ ec = [["Élément", "Qui fixe le prix", "Remarque"],
       [P("Liaison ou VPN vers le SMSC de chaque opérateur"), P("Opérateur"), P("Condition d'accès au réseau SMPP.")],
       [P("Comptes SMPP, activation et loyer des numéros courts"), P("Opérateur"), P("Dépend de vos contrats d'accès.")],
       [P("Tarifs de terminaison des SMS, SMS de test"), P("Opérateur"), P("Facturés par l'opérateur selon votre contrat.")],
-      [P("Reversements opérateurs sur les services à valeur ajoutée"), P("Contrat opérateur"), P("Paramétrés dans la plateforme (tarifs et répartitions).")]]
+      [P("Reversements opérateurs sur les services à valeur ajoutée"), P("Contrat opérateur"), P("Paramétrés dans la plateforme (tarifs et répartitions).")],
+      [P("Option USSD : attribution et loyer du code *xxx#, accès à la passerelle USSD"), P("Opérateur"), P("Par opérateur et par code.")],
+      [P("Option DCB : contrat de paiement sur facture, commission opérateur sur chaque paiement"), P("Opérateur"), P("Commission déduite par l'opérateur ; reversement paramétré dans la plateforme.")],
+      [P("Option IVR : numéros surtaxés (80 xx xx xx) et trunk SIP vers le serveur vocal"), P("Opérateur"), P("Par numéro et par minute selon contrat.")],
+      [P("Option WhatsApp : frais de conversation (grille Meta par pays et catégorie) ; option RCS : tarif du fournisseur RBM / agrégateur"), P("Meta / fournisseur RCS"), P("Facturés directement au client, hors facture opérateur de l'abonné.")]]
 el2.append(table(ec, [75 * mm, 35 * mm, 70 * mm]))
 el2.append(Spacer(1, 3 * mm))
 by = [["Budget indicatif de la première année", "HT (TND)"], ["Offre commerciale (prestations + achats inclus, section 6.A)", tnd(total_ht)],

@@ -184,5 +184,21 @@ await fetch(SIM + '/tps?v=0');
   const tf = cat ? (await A('/admin/tariffs?serviceId=' + cat.id)) : [];
   ok(Array.isArray(tf) && tf.length === 1 && tf[0].approved === false, 'tarif du catalogue non approuvé (double validation conservée)');
 }
+// ---------- options sur PostgreSQL réel : USSD → moteur de vote → SMS via Jasmin, décisionnel, antifraude ----------
+{
+  const menu = { text: 'Bienvenue\n1. Voter A', options: { 1: { text: 'Vote A pris en compte', action: 'KEYWORD', param: 'VOTE A' } } };
+  const saved = await A('/admin/channels/menus', 'POST', { channel: 'USSD', code: '*855#', serviceId: svc.id, definition: JSON.stringify(menu) });
+  ok(saved && saved.id, 'menu USSD enregistré (validation serveur)');
+  const ussd = async (sid, text) => (await fetch(BASE + '/callbacks/ussd', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ secret: process.env.CALLBACK_SECRET || '', sessionId: sid, phoneNumber: '98111333', serviceCode: '*855#', text }) })).text();
+  const sid = 'it-' + Date.now();
+  ok((await ussd(sid, '')).startsWith('CON Bienvenue'), 'USSD : menu affiché (CON)');
+  ok((await ussd(sid, '1')) === 'END Vote A pris en compte', 'USSD : feuille KEYWORD exécutée (END)');
+  const smsc = await until(async () => (await simMessages()).find((m) => (m.to || '').endsWith('98111333')), 30000);
+  ok(!!smsc, 'USSD : confirmation du vote envoyée par SMS jusqu\'au SMSC (Jasmin)');
+  const bi = await A('/admin/analytics');
+  ok(bi && bi.kpis && Array.isArray(bi.revenueByDay) && bi.channels.some((c) => c.channel === 'MO USSD'), 'décisionnel sur PostgreSQL : indicateurs et volume MO USSD');
+  ok(Array.isArray(await A('/admin/fraud/alerts')) && Array.isArray(await A('/admin/fraud/blocks')), 'antifraude : écrans lisibles sur PostgreSQL');
+}
 console.log(failed === 0 ? '\nINTÉGRATION COMPLÈTE : TOUT EST OK' : `\n${failed} ÉCHEC(S)`);
 process.exit(failed === 0 ? 0 : 1);

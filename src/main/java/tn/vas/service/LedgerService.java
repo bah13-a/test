@@ -29,28 +29,38 @@ public class LedgerService {
     /** Crée l'événement s'il n'existe pas ; retourne l'événement existant sinon. Aucun tarif approuvé → pas d'événement. */
     @Transactional
     public Optional<LedgerEvent> record(String eventId, EventType type, MtMessage mt, VasService svc) {
+        return record(eventId, type, mt.getOperator(), svc, mt.getSender(), mt.getMsisdn(), mt.getCorrelationId(), 1);
+    }
+
+    /**
+     * Événement facturable hors MT (USSD, IVR à la minute, paiement DCB) : montant = tarif approuvé en vigueur × quantité.
+     * Même idempotence par event_id ; aucun tarif approuvé → pas d'événement.
+     */
+    @Transactional
+    public Optional<LedgerEvent> record(String eventId, EventType type, Operator operator, VasService svc, String shortCode, String msisdn,
+                                        String sourceReference, int quantity) {
         Optional<LedgerEvent> existing = ledger.findByEventId(eventId);
         if (existing.isPresent()) return existing;
         var now = clock.instant();
         var tariff = tariffs.effective(svc, type, now).stream().findFirst();
-        if (tariff.isEmpty()) return Optional.empty();
+        if (tariff.isEmpty() || quantity <= 0) return Optional.empty();
         Tariff t = tariff.get();
         BigDecimal partnerPct = svc.getPartner() == null ? BigDecimal.ZERO : svc.getPartner().getSharePercent();
-        RevenueSplit s = RevenueSplit.compute(t.getGrossAmount(), t.getTaxPercent(), t.getOperatorPercent(), partnerPct);
+        RevenueSplit s = RevenueSplit.compute(t.getGrossAmount().multiply(BigDecimal.valueOf(quantity)), t.getTaxPercent(), t.getOperatorPercent(), partnerPct);
         var e = new LedgerEvent();
         e.setEventId(eventId);
         e.setEventType(type);
-        e.setOperator(mt.getOperator());
+        e.setOperator(operator);
         e.setService(svc);
-        e.setShortCode(mt.getSender());
-        e.setMsisdn(mt.getMsisdn());
+        e.setShortCode(shortCode);
+        e.setMsisdn(msisdn);
         e.setGrossAmount(s.gross());
         e.setTaxes(s.taxes());
         e.setOperatorShare(s.operatorShare());
         e.setPartnerShare(s.partnerShare());
         e.setProviderShare(s.providerShare());
         e.setBillingStatus(BillingStatus.PENDING);
-        e.setSourceReference(mt.getCorrelationId());
+        e.setSourceReference(sourceReference);
         e.setCreatedAt(now);
         e.setUpdatedAt(now);
         e = ledger.save(e);

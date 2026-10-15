@@ -49,3 +49,16 @@ code { background:var(--bg); padding:2px 6px; border-radius:4px; word-break:brea
 
 .bars { display:flex; align-items:flex-end; gap:2px; height:120px; border-bottom:1px solid var(--line); margin-bottom:8px; }
 .bars .bar { flex:1; min-width:3px; background:var(--accent); border-radius:2px 2px 0 0; }
+
+/* Application mobile (PWA) : menu en bandeau défilant, en-tête et indicateurs adaptés aux petits écrans, zones tactiles de 44 px */
+textarea { width:100%; font-family:ui-monospace, monospace; font-size:.85rem; background:var(--card); color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:6px; }
+[role="tablist"] { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+@media (max-width: 720px) {
+  nav[aria-label] { flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:thin; }
+  nav[aria-label] button { flex:0 0 auto; min-height:44px; }
+  header { flex-wrap:wrap; gap:6px; }
+  .stats .stat { flex:1 1 45%; }
+  .btn, select, input { min-height:44px; }
+  .card { padding:10px; }
+}
+@media (display-mode: standalone) { header { padding-top:max(8px, env(safe-area-inset-top)); } }

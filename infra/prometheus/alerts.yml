@@ -32,3 +32,11 @@ groups:
         for: 5m
         labels: { severity: warning }
         annotations: { summary: "Redis indisponible : quotas API et freinage des échecs d'authentification en mode local" }
+      - alert: FraudAlerts
+        expr: sum by (rule) (increase(vas_fraud_alert_total[15m])) > 0
+        labels: { severity: warning }
+        annotations: { summary: "Antifraude : alerte {{ $labels.rule }} (écran Antifraude du back-office : acquitter ou lever le blocage)" }
+      - alert: FraudSpikeBurst
+        expr: sum(increase(vas_fraud_alert_total[15m])) > 20
+        labels: { severity: critical }
+        annotations: { summary: "Antifraude : plus de 20 alertes en 15 min (attaque probable) : vérifier les services surtaxés et les paiements DCB" }

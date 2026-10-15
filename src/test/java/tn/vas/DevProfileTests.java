@@ -22,6 +22,9 @@ import tn.vas.service.WebhookService;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("dev")
+// même clé que les contextes « test » : la clé de chiffrement des numéros est statique (JVM), et les envois asynchrones d'un contexte
+// précédent qui se terminent pendant ce démarrage ne doivent pas écrire en base « vas » avec la clé dev
+@org.springframework.test.context.TestPropertySource(properties = "vas.data-key=test-data-key-0123456789abcdef0123456789abcdef")
 class DevProfileTests {
     @Autowired MockMvc mvc;
     @Autowired OperatorRepo operators;

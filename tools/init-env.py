@@ -51,7 +51,7 @@ def main():
     if need("TOKEN_SECRET"): gen["TOKEN_SECRET"] = rnd(48)
     if need("DATA_KEY"): gen["DATA_KEY"] = rnd(64)
     if need("CALLBACK_SECRET"): gen["CALLBACK_SECRET"] = rnd(32)
-    for k, n in (("DB_PASSWORD", 28), ("RABBIT_PASSWORD", 28), ("REDIS_PASSWORD", 28), ("GRAFANA_PASSWORD", 24), ("DB_SUPERUSER_PASSWORD", 28), ("DB_REPLICATION_PASSWORD", 28), ("RABBIT_COOKIE", 32)):
+    for k, n in (("DB_PASSWORD", 28), ("RABBIT_PASSWORD", 28), ("REDIS_PASSWORD", 28), ("GRAFANA_PASSWORD", 24), ("DB_SUPERUSER_PASSWORD", 28), ("DB_REPLICATION_PASSWORD", 28), ("RABBIT_COOKIE", 32), ("WHATSAPP_VERIFY_TOKEN", 32), ("RCS_WEBHOOK_SECRET", 40)):
         if need(k): gen[k] = rnd(n)
     if need("JASMIN_PASSWORD"): gen["JASMIN_PASSWORD"] = rnd(14)         # 12 à 16 caractères alphanumériques (limite de Jasmin)
     if need("JCLI_PASSWORD") or need("JCLI_PASSWORD_MD5"):

@@ -30,3 +30,9 @@ vas:
   retry:
     max-attempts: 3
     backoff-seconds: 0
+  chat:
+    mode: simulator
+    whatsapp: { app-secret: test-app-secret, verify-token: test-verify-token, phone-number-id: "1000" }
+    rcs: { webhook-secret: test-rcs-secret }
+  dcb:
+    mode: simulator

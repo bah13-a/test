@@ -51,6 +51,9 @@ public final class Repos {
         List<Object[]> resultsByContent(@Param("s") VasService s);
         @Query("select m.outcome, count(m) from MoMessage m where m.receivedAt >= :from group by m.outcome")
         List<Object[]> countByOutcomeSince(@Param("from") Instant from);
+        long countByMsisdnAndReceivedAtAfter(String msisdn, Instant after);
+        @Query("select m.service.id, count(m) from MoMessage m where m.service is not null and m.receivedAt >= :from and m.receivedAt < :to group by m.service.id")
+        List<Object[]> countByServiceBetween(@Param("from") Instant from, @Param("to") Instant to);
     }
 
     public interface MtRepo extends JpaRepository<MtMessage, Long>, org.springframework.data.jpa.repository.JpaSpecificationExecutor<MtMessage> {
@@ -87,6 +90,9 @@ public final class Repos {
     }
 
     public interface LedgerRepo extends JpaRepository<LedgerEvent, Long>, org.springframework.data.jpa.repository.JpaSpecificationExecutor<LedgerEvent> {
+        @Query("select coalesce(sum(e.grossAmount), 0) from LedgerEvent e where e.msisdn = :m and e.createdAt >= :from "
+                + "and e.billingStatus not in (tn.vas.domain.Enums.BillingStatus.REJECTED, tn.vas.domain.Enums.BillingStatus.REVERSED)")
+        java.math.BigDecimal spentSince(@Param("m") String msisdn, @Param("from") Instant from);
         Optional<LedgerEvent> findByEventId(String eventId);
         List<LedgerEvent> findByOperatorAndCreatedAtBetween(Operator o, Instant from, Instant to);
         @Query("select e.billingStatus, sum(e.grossAmount), sum(e.partnerShare), sum(e.providerShare), count(e) from LedgerEvent e "
@@ -200,5 +206,45 @@ public final class Repos {
         List<Object[]> tally(@Param("s") VasService s);
         @Query("select count(distinct b.msisdn) from VoteBallot b where b.service = :s")
         long distinctVoters(@Param("s") VasService s);
+    }
+
+    public interface FraudAlertRepo extends JpaRepository<FraudAlert, Long> {
+        List<FraudAlert> findTop200ByStatusOrderByIdDesc(String status);
+        List<FraudAlert> findTop200ByOrderByIdDesc();
+        boolean existsByRuleAndMsisdnAndCreatedAtAfter(String rule, String msisdn, Instant after);
+        boolean existsByRuleAndServiceAndCreatedAtAfter(String rule, VasService service, Instant after);
+    }
+
+    public interface FraudBlockRepo extends JpaRepository<FraudBlock, Long> {
+        @Query("select count(b) > 0 from FraudBlock b where b.msisdn = :m and b.untilAt > :now and b.liftedBy is null")
+        boolean blocked(@Param("m") String msisdn, @Param("now") Instant now);
+        @Query("select b from FraudBlock b where b.untilAt > :now and b.liftedBy is null order by b.id desc")
+        List<FraudBlock> active(@Param("now") Instant now);
+    }
+
+    public interface MenuRepo extends JpaRepository<MenuDefinition, Long> {
+        Optional<MenuDefinition> findByChannelAndCode(Enums.Channel channel, String code);
+        List<MenuDefinition> findByChannelOrderByCode(Enums.Channel channel);
+    }
+
+    public interface UssdSessionRepo extends JpaRepository<UssdSession, Long> {
+        Optional<UssdSession> findBySessionId(String sessionId);
+    }
+
+    public interface IvrCallRepo extends JpaRepository<IvrCall, Long> {
+        Optional<IvrCall> findByCallId(String callId);
+    }
+
+    public interface DcbRepo extends JpaRepository<DcbTransaction, Long> {
+        Optional<DcbTransaction> findByTxId(String txId);
+        Optional<DcbTransaction> findByApiClientIdAndClientRef(Long apiClientId, String clientRef);
+        List<DcbTransaction> findTop200ByOrderByIdDesc();
+        @Query("select t from DcbTransaction t where t.status = 'OTP_SENT' and t.otpExpiresAt < :now")
+        List<DcbTransaction> expired(@Param("now") Instant now);
+    }
+
+    public interface ChatChannelRepo extends JpaRepository<ChatChannel, Long> {
+        Optional<ChatChannel> findByKindAndAddressAndActiveTrue(Enums.Channel kind, String address);
+        List<ChatChannel> findByKindAndActiveTrue(Enums.Channel kind);
     }
 }
