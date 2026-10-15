@@ -20,11 +20,22 @@ Légende : **Auto** = test automatisé exécuté en CI (`mvn verify`) ; **SIT** 
 | A14 | RBAC inter-comptes | Auto | `partnerPortalIsolation`, `apiKeyScopesAndPartnerIsolation`, `adminRbacAndFourEyesTariff` (accès refusé + audit) |
 | A15 | Rapprochement | Auto | `FlowTests.reconciliationXlsxAndCsv`, `UnitTests.csvParsingWithMapping` |
 | A16 | Restauration | Exécuté | `infra/backup/verify-restore.sh` (résultat dans `12-rapport-tests.md`) |
+| A17 | USSD : navigation, choix invalide, vote, facturation | Auto + SIT | `ChannelsTests.ussdMenuRoutesKeywordAndCharges` ; pile réelle : USSD → vote → SMS via Jasmin ; **OP** : passerelle USSD de chaque opérateur |
+| A18 | IVR : menu DTMF, facturation à la minute | Auto | `ChannelsTests.ivrMenuAndPerMinuteBilling` ; **OP** : Asterisk + trunk SIP |
+| A19 | DCB : code, débit, remboursement, abus | Auto | `dcbOtpChargeRefundAndIsolation`, `dcbInsufficientBalanceAndOtpAbuse`, `concurrentDcbConfirmationsCannotBypassTheAttemptLimit` ; **OP** : API DCB |
+| A20 | WhatsApp / RCS : entrant signé, réponse, statut | Auto | `whatsappInboundRoutesToKeywordAndRepliesOnSameChannel`, `rcsInboundSigned` ; **OP** : compte Meta / fournisseur RCS |
+| A21 | Modèles WhatsApp : approbation, accord, STOP | Auto | `whatsappTemplatesRequireApprovalAndOptInAndStopRevokes` |
+| A22 | Serveur SMPP clients : bind, submit, accusés, MO, refus | Auto | `SmppServerTests` (5 scénarios, vrai client SMPP) ; **PART** : recette avec chaque partenaire |
+| A23 | Antifraude : vitesse, plafond, score | Auto | `velocityBlocksNumberButStopStillWorks`, `dailySpendLimitStopsBilledActions`, `riskScoreIsExplainableAndFlagsOutliers` ; calibrage sur historique réel |
+| A24 | Décisionnel et entrepôt | Auto + SIT | `analyticsOverviewAndExport`, `dataWarehouseEtlIsIdempotentAndMatchesTheLedger` ; pile réelle : ETL sur PostgreSQL |
+| A25 | Applications mobiles | CI | PWA : `options.test.jsx` ; Android / iOS : jobs `mobile-android`, `mobile-ios` ; **stores** : publication client |
 
 | §14.2 | Résultat attendu | Statut |
 |---|---|---|
 | Bind, MO, MT, DLR, Unicode, Long SMS, Throttling | voir A02-A12 | Auto avec simulateur ; **OP** à exécuter avec chaque opérateur |
 | Facturation (cinématique de test opérateur) | rapprochement possible | Auto (ledger+rapprochement) ; cinématique opérateur : **OP** |
 | VPN | connectivité restreinte | **OP** / infrastructure |
+
+Légende : **OP** = à exécuter avec l'opérateur ; **PART** = avec le partenaire ; SIT = pile d'intégration réelle (PostgreSQL, RabbitMQ, Redis, Jasmin, simulateur SMSC).
 
 Conditions de réception définitive (§14.3) : les points 3 (documentation), 4 (code remis), 7 (restauration) sont couverts par ce dépôt ; les points 1-2 et 5-6 dépendent de la recette opérateur et de la remise des accès de production.

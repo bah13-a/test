@@ -103,7 +103,7 @@ Tableau de bord par service : participants, MO par issue, MT par statut, taux de
 Services du partenaire, volumes MO/MT, taux de livraison, résultats par contenu, montants estimés et rapprochés, relevés par période, historique des reversements, exports. Aucun accès aux données d'un autre partenaire (tentative tracée).
 
 ### 4.10 Back-office (React, FR / AR avec RTL / EN)
-Écrans : tableau de bord, opérateurs, short codes, services (avec mots-clés, réponses, options de vote, questions de quiz, contenus), partenaires, tarifs, campagnes, messages (recherche multicritère), ledger, facturation, rapprochement, listes noire/blanche, support (consentements, désabonnement), utilisateurs, clients API, audit, sécurité. Listes paginées côté serveur, validations accessibles, confirmations pour les actions destructrices, conforme WCAG 2.1 AA.
+Écrans : tableau de bord, opérateurs, routage, short codes, services (avec mots-clés, réponses, options de vote, questions de quiz, contenus), partenaires, tarifs, campagnes, messages (recherche multicritère), ledger, facturation, rapprochement, décisionnel (BI et entrepôt), canaux (menus USSD / IVR, comptes WhatsApp / RCS, modèles, accès SMPP), paiements sur facture, antifraude, listes noire/blanche, support (consentements, désabonnement), utilisateurs, clients API, audit, sécurité. Listes paginées côté serveur, validations accessibles, confirmations pour les actions destructrices, conforme WCAG 2.1 AA.
 
 ### 4.11 Comptes et sécurité fonctionnelle
 - Mot de passe : 12 caractères minimum, lettres et chiffres ; verrouillage 15 min après 5 échecs ; **changement obligatoire** à la première connexion et après réinitialisation.
@@ -113,6 +113,20 @@ Services du partenaire, volumes MO/MT, taux de livraison, résultats par contenu
 
 ### 4.12 Supervision et exploitation
 Métriques Prometheus, tableaux Grafana, alertes (liaison coupée, file saturée, taux d'échec), journaux JSON agrégés (Loki), santé applicative, sauvegarde chiffrée et test de restauration, topologie haute disponibilité de référence.
+
+### 4.13 Options du cahier des charges (détail : `20-options-canaux-antifraude-bi.md`)
+| Option | Fonction |
+|---|---|
+| **USSD** | Menus interactifs par code `*xxx#` ; un choix peut voter, s'abonner, obtenir un contenu (mêmes règles que le SMS, confirmation par SMS) ou être facturé (tarif USSD). |
+| **IVR** | Mêmes menus au clavier sur un numéro vocal ; facturation à la minute entamée ; pont Asterisk fourni. |
+| **DCB** | Paiement sur facture opérateur au tarif approuvé du service, confirmé par un code reçu par SMS ; remboursement. |
+| **WhatsApp / RCS** | Mêmes mots-clés et services que le SMS, réponse sur le même canal ; envois à l'initiative du partenaire par modèle approuvé et avec l'accord de l'abonné. |
+| **Serveur SMPP** | Les partenaires se connectent en SMPP v3.4 ; mêmes règles que l'API (service, listes, antifraude, quota, facturation), accusés et MO remis. |
+| **Antifraude** | Vitesse par numéro, plafond de dépense journalier, pics par service, score de risque expliqué ; alertes et blocages temporaires (STOP / AIDE jamais bloqués). |
+| **Décisionnel** | Chiffre d'affaires facturé par jour, opérateur, service, partenaire et type ; ARPU, attrition, volumes par canal ; entrepôt de données chargé chaque nuit. |
+| **Mobile** | Application installable (PWA) et applications natives Android / iOS. |
+
+Toutes les options sont désactivées tant que leur contrat (opérateur, Meta, fournisseur RCS, stores) et leurs paramètres du `.env` ne sont pas fournis.
 
 ## 5. Profils d'exécution
 | | **dev** | **pro** |
@@ -145,4 +159,4 @@ Métriques Prometheus, tableaux Grafana, alertes (liaison coupée, file saturée
 10. Un MT n'est jamais perdu : il est réessayé, expiré, ou marqué en échec visible.
 
 ## 8. Limites connues
-Jamais testé contre un vrai SMSC opérateur (formats d'accusé et relevés propres à chaque opérateur à valider en recette) ; pas de test d'intrusion ni de test de charge à 200 SMS/s sur l'infrastructure cible ; la perte de la clé de chiffrement des numéros les rend irrécupérables.
+Options USSD, DCB, IVR, WhatsApp / RCS et serveur SMPP validées contre des simulateurs : formats d'API propres à chaque opérateur à confirmer à la signature des contrats ; applications natives construites par le CI, publication par le client. Jamais testé contre un vrai SMSC opérateur (formats d'accusé et relevés propres à chaque opérateur à valider en recette) ; pas de test d'intrusion ni de test de charge à 200 SMS/s sur l'infrastructure cible ; la perte de la clé de chiffrement des numéros les rend irrécupérables.
