@@ -11,6 +11,7 @@ L'application **refuse de démarrer sans profil explicite** (`ProfileGuard`) et 
 | Gateway | **mock** `SimulatorGateway` : accepte les MT, renvoie des DLR automatiques (`MIXED` : 90 % livrés, 5 % `UNDELIV`, 5 % `EXPIRED`), panne simulable | **Jasmin réel** (API HTTP) vers les SMSC opérateurs |
 | Données | **démonstration** : 3 opérateurs fictifs, 5 short codes, 4 services (vote, abonnement double opt-in, quiz réglementé non approuvé, premium), tarifs approuvés, partenaire + webhook, 24 MO simulés | **aucune donnée fictive** : opérateurs/short codes issus de `.env`, le reste créé dans le back-office |
 | Comptes | `admin / Admin-dev-pass1` ; `manager, noc, finance, finance2, support, auditor, club(PARTNER) / Dev-pass-12345` ; clé API `vas_dev_key_for_local_demo_only` | premier SUPER_ADMIN depuis `ADMIN_PASSWORD_HASH` ; les autres comptes créés dans l'interface |
+| Options (démonstration) | USSD `*123#` et IVR `80100100` (menu de vote), WhatsApp `demo-phone-id` → 85500 avec le modèle approuvé `rappel_vote`, tarifs USSD / IVR / DCB, client API de démo avec `dcb:charge` et `chat:send`, **SMPP** `demo` / `demo1234` sur le port 2777 | options désactivées tant que leurs contrats et le `.env` ne les activent pas |
 | MFA | possible, non imposé | **obligatoire** SUPER_ADMIN / FINANCE |
 | Secrets | valeurs d'exemple (publiques) | environnement uniquement, **aucune valeur par défaut** |
 | Bandeau UI | « ENVIRONNEMENT DE DÉMONSTRATION » + comptes de démo sur l'écran de connexion | aucun |

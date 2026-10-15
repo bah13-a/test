@@ -25,6 +25,8 @@ Environnement d'exécution : conteneur de développement (JDK 21, PostgreSQL 16,
 | `EnvContractTests` + `EnvDrivenTests` | 9 | OK | contrat du `.env` unique (toute variable utilisée est déclarée et inversement, aucun secret prérempli) ; données de démarrage pilotées par l'environnement |
 | Front (`vitest`) | 18 | OK | complétude des traductions FR/AR/EN, validation accessible des formulaires, modales, tableaux, pagination, histogramme avec tableau équivalent, changement de mot de passe |
 
+Parcours navigateur (Chromium) et audit d'accessibilité axe-core rejoués avec les nouveaux écrans (Décisionnel, Canaux, Paiements sur facture, Antifraude) : **48 vues en français et en arabe, 0 violation WCAG 2.1 A/AA**, parcours complet sans exception JavaScript.
+
 Total : **142 tests (124 Java dont 1 exécuté à part sur PostgreSQL réel + 18 front), 0 échec**. Intégration sur la pile réelle (PostgreSQL, RabbitMQ, Redis, Jasmin, simulateur SMSC) : tout est OK, y compris USSD → vote → SMS via Jasmin, décisionnel, ETL de l'entrepôt et scoring antifraude sur PostgreSQL. Applications natives : builds Android / iOS confiés au CI (pas de SDK Android ni de Mac dans l'environnement de développement).
 
 ## 2. Parcours navigateur (Chromium, `frontend/e2e/smoke.mjs`) sur PostgreSQL + Redis réels
