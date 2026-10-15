@@ -25,7 +25,7 @@ RATES = {"bas": dict(ARCHI=800, SDEV=600, DEV=450, DEVOPS=600, QA=420, PM=700, U
          "cible": dict(ARCHI=900, SDEV=700, DEV=550, DEVOPS=700, QA=500, PM=800, UX=550),
          "haut": dict(ARCHI=1100, SDEV=850, DEV=650, DEVOPS=800, QA=580, PM=950, UX=650)}
 # équipe : (nombre de personnes, taux d'occupation)
-TEAM = {"ARCHI": (1, 0.8), "SDEV": (2, 1.0), "DEV": (2, 1.0), "DEVOPS": (1, 0.5), "QA": (1, 0.75), "PM": (1, 0.5), "UX": (1, 0.2)}
+TEAM = {"ARCHI": (1, 0.8), "SDEV": (3, 0.85), "DEV": (3, 0.75), "DEVOPS": (1, 0.6), "QA": (1, 1.0), "PM": (1, 0.5), "UX": (1, 0.3)}   # options incluses : équipe renforcée
 CAP = {p: round(n * occ * WEEKS * 5) for p, (n, occ) in TEAM.items()}   # JH disponibles sur 8 semaines (5 j/sem.)
 
 # lot, JH par profil, semaines actives, livrables
@@ -38,16 +38,18 @@ LOTS = [
  ("6. API REST, webhooks, routage (lot D)", dict(ARCHI=2, SDEV=8, DEV=4, QA=2), {3, 4, 5}, "OpenAPI, clés et OAuth2, scopes, quotas Redis, webhooks signés anti-SSRF, routage par plages et portabilité."),
  ("7. CQRS : événements, projections, lecture", dict(ARCHI=5, SDEV=6, DEV=3, DEVOPS=1, QA=2), {3, 4, 5}, "Événements de domaine, modèles de lecture, réconciliation, réplica de lecture, règles d'architecture automatisées."),
  ("8. Sécurité et conformité", dict(ARCHI=3, SDEV=5, DEV=3, DEVOPS=1, QA=2), {4, 5, 6, 7}, "RBAC 7 rôles, MFA, sessions, chiffrement des numéros et rotation de clé, audit immuable, anti-brute-force."),
- ("9. Back-office et portail partenaire (lots E, F)", dict(ARCHI=1, DEV=30, QA=4, UX=6), {3, 4, 5, 6, 7}, "17 écrans, FR / AR (RTL) / EN, accessibilité WCAG 2.1 AA, exports, portail isolé."),
+ ("9. Back-office et portail partenaire (lots E, F)", dict(ARCHI=1, DEV=30, QA=4, UX=6), {3, 4, 5, 6, 7}, "22 écrans, FR / AR (RTL) / EN, accessibilité WCAG 2.1 AA, exports, portail isolé."),
  ("10. Infrastructure et exploitation (lot G)", dict(ARCHI=1, DEVOPS=10, QA=1), {1, 2, 6, 7, 8}, "Conteneurs, Prometheus / Grafana / Loki, alertes, sauvegarde et restauration, topologie HA de référence, CI/CD."),
  ("11. Tests et recette interne", dict(ARCHI=1, SDEV=3, DEV=3, DEVOPS=2, QA=6), {5, 6, 7, 8}, "Intégration sur pile réelle, charge, parcours navigateur, accessibilité, rapport de tests."),
  ("12. Documentation, formation, transfert (lot H)", dict(ARCHI=1, SDEV=2, DEV=2, DEVOPS=1, PM=2), {7, 8}, "HLD / LLD, guides, PRA, rapport de sécurité, 2 jours de formation, PV de transfert."),
+ ("14. Options du cahier des charges", dict(ARCHI=2, SDEV=24, DEV=12, DEVOPS=4, QA=10, UX=3), {4, 5, 6, 7, 8},
+  "USSD et IVR (menus, sessions, facturation, pont Asterisk), paiement sur facture DCB, WhatsApp / RCS et modèles, serveur SMPP pour clients externes, antifraude (règles et scoring), décisionnel et entrepôt de données (ETL), PWA et applications Android / iOS."),
  ("13. Pilotage de projet", dict(PM=14), set(range(1, 9)), "Comités hebdomadaires, suivi des risques, coordination avec les opérateurs."),
 ]
 alloc = {p: sum(l[1].get(p, 0) for l in LOTS) for p in ORDER}
 rest = {p: CAP[p] - alloc[p] for p in ORDER}
 assert all(v >= 0 for v in rest.values()), rest
-LOTS.append(("14. Revue de code, intégration continue, aléas courants", {p: v for p, v in rest.items() if v}, set(range(1, 9)), "Revues croisées, correction d'anomalies, arbitrages techniques."))
+LOTS.append(("15. Revue de code, intégration continue, aléas courants", {p: v for p, v in rest.items() if v}, set(range(1, 9)), "Revues croisées, correction d'anomalies, arbitrages techniques."))
 assert {p: sum(l[1].get(p, 0) for l in LOTS) for p in ORDER} == CAP
 
 NONLABOR = [("Environnement de préproduction hébergé (2 mois)", 3500), ("Déplacements et ateliers sur site (opérateurs, client)", 2500)]
@@ -161,7 +163,7 @@ ms = [["Jalon", "Fin de", "Livrable démontré"],
       ["J1 - Architecture validée", "S1", "ADR (CQRS), modèle de données, backlog priorisé, environnements prêts."],
       ["J2 - Flux MO → MT → DLR", "S3", "Chaîne complète sur simulateur SMSC : réception, réponse, accusé, premier ledger."],
       ["J3 - Cœur métier", "S5", "Moteurs vote / quiz / contenu, abonnements, billing, API et webhooks, modèles de lecture."],
-      ["J4 - Back-office complet", "S6", "17 écrans FR / AR / EN, portail partenaire, rapprochement, clôture de période."],
+      ["J4 - Back-office complet", "S6", "22 écrans FR / AR / EN, portail partenaire, rapprochement, clôture de période."],
       ["J5 - Sécurité et supervision", "S7", "RBAC, MFA, chiffrement, audit immuable, tableaux de bord et alertes."],
       ["J6 - Livraison V1", "S8", "Recette interne signée, documentation, formation, code source et scripts de déploiement."]]
 ms = [ms[0]] + [[P(a) if not hasattr(a, "wrap") else a, b, P(c) if not hasattr(c, "wrap") else c] for a, b, c in ms[1:]]

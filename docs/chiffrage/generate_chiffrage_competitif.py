@@ -36,6 +36,8 @@ LOTS = [
  ("9. Revue de sécurité et durcissement", dict(ARCHI=1, SDEV=2, DEVOPS=1), {6, 7}, "Revue des configurations, contrôle des accès, rotation de clés, préparation au test d'intrusion."),
  ("10. Formation, documentation, transfert", dict(SDEV=1, DEVOPS=1, QA=1, PM=1), {7, 8}, "2 jours de formation, documentation à jour, PV de transfert."),
  ("11. Mise en production et suivi renforcé (2 semaines)", dict(SDEV=3, DEVOPS=3, PM=1), {7, 8}, "Bascule, surveillance rapprochée, correction à chaud, transfert des accès."),
+ ("13. Options : USSD, IVR, DCB, WhatsApp / RCS, serveur SMPP, antifraude, BI, applications mobiles", dict(SDEV=16, DEV=6, DEVOPS=4, QA=12, UX=3), {5, 6, 7, 8},
+  "Modules livrés et testés : raccordement aux passerelles USSD / DCB / vocales des opérateurs, comptes WhatsApp et RCS, ouverture du serveur SMPP aux partenaires, calibrage antifraude, entrepôt et outil BI, publication des applications ; recette de chaque option dès que son contrat est disponible."),
  ("12. Pilotage de projet", dict(PM=4), set(range(1, 9)), "Comité hebdomadaire, suivi des dépendances opérateurs."),
 ]
 NONLABOR = [("Environnement de préproduction hébergé (2 mois)", 1500), ("Déplacements et ateliers sur site", 1000)]
@@ -73,10 +75,10 @@ def footer(c, d):
 
 doc = SimpleDocTemplate(OUT, pagesize=A4, leftMargin=15 * mm, rightMargin=15 * mm, topMargin=14 * mm, bottomMargin=16 * mm,
                         title="Offre compétitive - Plateforme VAS SMPP Tunisie", author="Offre")
-SCRATCH_HT, PREV_HT = 202020, 69720
+SCRATCH_HT, PREV_HT = 236010, 69720   # réalisation complète options incluses (generate_chiffrage_2mois.py) ; offre précédente
 el = [Spacer(1, 22 * mm), P("OFFRE COMPÉTITIVE", T), P(f"{tnd(total_ht)} TND HT - prix ferme - en service en 8 semaines", ParagraphStyle("x", parent=H1, fontSize=16)),
       P("Plateforme VAS / SMS Premium - SMPP v3.4 - Tunisie Telecom, Orange Tunisie, Ooredoo Tunisie", B), Spacer(1, 6 * mm),
-      P("Le prix est bas parce que la plateforme existe déjà : elle est livrée avec son code source complet, ses 108 tests automatisés, sa documentation et ses scripts de déploiement. "
+      P("Le prix est bas parce que la plateforme existe déjà : elle est livrée avec son code source complet, ses 140 tests automatisés, sa documentation et ses scripts de déploiement. "
         "Vous ne payez ni la conception ni le développement : vous payez l'installation, l'intégration avec les trois opérateurs, la recette, la mise en production et la formation.", B), Spacer(1, 7 * mm)]
 el.append(table([["Charge", f"{JH} jours-homme sur {WEEKS} semaines"], ["Main-d'œuvre (taux bas du marché)", f"{tnd(labor)} TND"],
                  [f"Aléas ({int(CONTINGENCY*100)} %)", f"{tnd(conting)} TND"], ["Préproduction et déplacements", f"{tnd(nonlabor)} TND"],
@@ -130,7 +132,7 @@ el.append(P("4. Positionnement par rapport aux alternatives", H1))
 cmp_ = [["Option", "Prix HT (TND)", "Délai", "Remarque"],
         [P("<b>Cette offre : plateforme existante + mise en service</b>"), tnd(total_ht), "8 sem.", P("Code, tests et documentation déjà livrés ; reste l'intégration réelle.")],
         [P("Offre plafonnée précédente (finalisation sur 16 semaines)"), tnd(PREV_HT), "16 sem.", P("Même base, étalée sur plus longtemps, avec une équipe plus petite.")],
-        [P("Réalisation complète depuis zéro en 2 mois"), tnd(SCRATCH_HT), "8 sem.", P("9 personnes en parallèle ; coût du développement inclus.")],
+        [P("Réalisation complète depuis zéro en 2 mois"), tnd(SCRATCH_HT), "8 sem.", P("11 personnes en parallèle ; développement des options inclus.")],
         [P("Agence full-stack, 700 - 1 200 TND/jour, même charge de développement"), "≥ 190 000", "variable", P("Estimation : charge de la réalisation depuis zéro (270 JH) au bas de la fourchette d'agence.")]]
 el.append(table(cmp_, [70 * mm, 26 * mm, 20 * mm, 64 * mm], right=(1,)))
 el.append(Spacer(1, 1.5 * mm))
