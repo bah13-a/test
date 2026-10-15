@@ -175,6 +175,21 @@ ea = [["Achat", "Montant HT (TND)", "Base de calcul"]] + [[P(a), tnd(b), P(c)] f
 el.append(table(ea, [75 * mm, 30 * mm, 75 * mm], right=(1,), total=True))
 el.append(P("Les achats nécessaires à la charge du client (hébergement de production, audit de sécurité, liaisons opérateurs, etc.) ne font pas partie de ce prix : "
             "ils sont détaillés dans le document distinct <b>« Achats nécessaires »</b> (Achats_necessaires_VAS_SMPP_Tunisie.pdf).", B))
+el.append(P("6.B Ce qui n'est pas inclus dans le prix", H2))
+ni = [["Élément non inclus", "Qui en a la charge", "Détail ou suite"],
+      [P("Hébergement de production en haute disponibilité, adresses IP, bande passante"), P("Client"), P("Document « Achats nécessaires » (estimation).")],
+      [P("Stockage hors site des sauvegardes, nom de domaine, certificat TLS, serveur d'envoi des alertes (SMTP)"), P("Client"), P("Document « Achats nécessaires ».")],
+      [P("Audit de sécurité / test d'intrusion par un auditeur indépendant (le prestataire prépare le périmètre, lot 9)"), P("Client"), P("Document « Achats nécessaires ».")],
+      [P("Cartes SIM de test et crédit de test"), P("Client"), P("Document « Achats nécessaires ».")],
+      [P("Liaison ou VPN vers chaque SMSC, comptes SMPP, activation et loyer des numéros courts, tarifs de terminaison des SMS"), P("Opérateurs, selon vos contrats"), P("Montants communiqués par chaque opérateur.")],
+      [P("Conseil juridique : protection des données personnelles, conditions d'utilisation, durées de conservation"), P("Client et son conseil"), P("Le prestataire fournit les paramètres techniques.")],
+      [P("Préproduction permanente après la livraison (la préproduction du projet est incluse en 6.A)"), P("Client, option"), P("Environ 10 900 TND/an (3 machines).")],
+      [P("Maintenance et support après la garantie de 3 mois"), P("Option"), P(f"Environ {tnd(maint)} TND/an, section 8.")],
+      [P("Exploitation de la production après le suivi renforcé de 2 semaines"), P("Client (formation incluse)"), P("Reprise possible via la maintenance.")],
+      [P("Options hors périmètre : USSD, DCB, IVR, RCS / WhatsApp, BI, antifraude, application mobile"), P("Option"), P("Chiffrables séparément sur demande.")],
+      [P("Évolutions hors cahier des charges V1.0, et capacités au-delà de 50 SMS/s par opérateur"), P("Avenant"), P(f"Au taux moyen de l'offre ({tnd(labor / JH)} TND/jour-homme).")],
+      [P("Frais de contrats opérateurs et taxes réglementaires éventuelles"), P("Client"), P("Selon vos contrats et votre statut.")]]
+el.append(table(ni, [88 * mm, 38 * mm, 54 * mm]))
 
 el.append(Spacer(1, 4 * mm))
 el.append(P("7. Responsabilités et prérequis", H1))
