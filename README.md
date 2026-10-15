@@ -66,7 +66,7 @@ Sécurité : **numéros chiffrés en base (AES-256, clé `DATA_KEY`)**, journal 
 - Test d'intrusion et test de charge à 200 SMS/s sur l'infrastructure cible : à faire. Résultats mesurés : `docs/12-rapport-tests.md`.
 - Aucune plage de numéros n'est préchargée (attributions et portabilité = données officielles à importer, écran *Routage*) : à défaut, l'opérateur vient du service/short code, de l'appelant ou des préfixes déclarés.
 - Durées de conservation et textes d'information : à fixer avec le conseil juridique (CDC §11.3).
-- Options hors V1 (USSD, DCB, IVR, RCS/WhatsApp, BI, antifraude, appli mobile, serveur SMPP) : chiffrées, non codées.
+- Options : USSD, IVR, DCB, WhatsApp / RCS, antifraude par règles, décisionnel sur la base de production et application mobile installable (PWA) sont codés et testés (`docs/20`), activation soumise aux contrats. **Non codés** : serveur SMPP pour clients externes, entrepôt de données / ETL, scoring antifraude statistique, applications natives iOS / Android publiées sur les stores, modèles WhatsApp à l'initiative du partenaire.
 
 ## Chiffrage
 `docs/Chiffrage_detaille_VAS_SMPP_Tunisie_V1.pdf` (généré par `docs/chiffrage/generate_chiffrage.py`, hypothèses modifiables) : bordereau §19, détail par profil, planning, hébergement, options, TCO 3 ans, avancement du code et reste à faire.
