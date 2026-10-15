@@ -62,7 +62,7 @@ class EnvContractTests {
     @Test
     void everyDeclaredVariableIsActuallyUsed() throws IOException {
         StringBuilder corpus = new StringBuilder();
-        for (String f : List.of("src/main/resources/application-pro.yml", "docker-compose.yml", "infra/ha/docker-compose.ha.yml", "Dockerfile")) corpus.append(read(f)).append('\n');
+        for (String f : List.of("src/main/resources/application-pro.yml", "docker-compose.yml", "infra/ha/docker-compose.ha.yml", "Dockerfile", "mobile/configure.mjs")) corpus.append(read(f)).append('\n');
         try (Stream<Path> s = Files.walk(ROOT.resolve("infra"))) {
             for (Path p : s.filter(Files::isRegularFile).toList()) corpus.append(Files.readString(p)).append('\n');
         }

@@ -36,4 +36,9 @@ public class MtMessage {
     private Instant validityUntil;
     private Long subscriptionId;
     private Instant scheduledAt;
+    /** Client SMPP : accusé de livraison demandé / déjà remis. */
+    private boolean smppDlr;
+    private boolean smppDlrSent;
+    /** Contenu structuré hors SMS (JSON) : modèle WhatsApp {template, lang, params}. */
+    private String payload;
 }

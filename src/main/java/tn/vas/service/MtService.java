@@ -89,6 +89,7 @@ public class MtService {
         h.setAt(clock.instant());
         history.save(h);
         metrics.counter("vas.mt", "status", s.name()).increment();
+        if (m.getApiClientId() != null && (DlrMapper.isFinal(s) || s == MtStatus.UNKNOWN)) events.publishEvent(new tn.vas.event.DomainEvents.MtFinal(m.getCorrelationId()));
         events.publishEvent(new tn.vas.event.DomainEvents.MtTransitioned(m.getCreatedAt(), m.getOperator().getId(), m.getService() == null ? null : m.getService().getId(), previous, s));
     }
 }

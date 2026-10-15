@@ -180,6 +180,16 @@ def main():
     for k in ("FRAUD_DAILY_SPEND_LIMIT", "FRAUD_SPIKE_FACTOR"):
         if not re.fullmatch(r"\d+(\.\d+)?", g(k)): err(f"{k} : nombre attendu")
     if len(g("FRAUD_SPIKE_CRON").split()) != 6: err("FRAUD_SPIKE_CRON : cron Spring à 6 champs attendu")
+    for k, lo, hi in (("FRAUD_SCORE_ALERT", 1, 100), ("FRAUD_SCORE_BLOCK", 1, 100), ("SMPP_SERVER_PORT", 1, 65535), ("DWH_ETL_DAYS", 1, 60)):
+        v = g(k)
+        if not re.fullmatch(r"\d+", v) or not lo <= int(v) <= hi: err(f"{k} : entier entre {lo} et {hi} attendu (valeur : « {v} »)")
+    if g("FRAUD_SCORE_ALERT").isdigit() and g("FRAUD_SCORE_BLOCK").isdigit() and int(g("FRAUD_SCORE_ALERT")) > int(g("FRAUD_SCORE_BLOCK")): err("FRAUD_SCORE_ALERT doit être ≤ FRAUD_SCORE_BLOCK")
+    if not re.fullmatch(r"\d+(\.\d+)?", g("FRAUD_SPIKE_Z")): err("FRAUD_SPIKE_Z : nombre attendu")
+    for k in ("FRAUD_SCORE_CRON", "DWH_ETL_CRON"):
+        if len(g(k).split()) != 6: err(f"{k} : cron Spring à 6 champs attendu")
+    if g("SMPP_SERVER_ENABLED") not in ("true", "false"): err("SMPP_SERVER_ENABLED : true ou false")
+    elif g("SMPP_SERVER_ENABLED") == "true" and g("SMPP_SERVER_BIND") in ("0.0.0.0", "::"): warn("SMPP_SERVER_BIND ouvert sur toutes les interfaces : réserver le port SMPP au VPN partenaires")
+    if not re.fullmatch(r"[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+", g("MOBILE_APP_ID")): err("MOBILE_APP_ID : identifiant de type domaine inversé (ex. tn.client.vas)")
     if g("DCB_MODE") not in ("disabled", "http"): err("DCB_MODE : disabled ou http")
     elif g("DCB_MODE") == "http":
         dcb_ops = [op for op in OPS if g(f"{op}_DCB_URL")]

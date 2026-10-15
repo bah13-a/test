@@ -54,6 +54,7 @@ class ChannelsTests {
     @Autowired ChatChannelRepo chats;
     @Autowired ChatGateways chatGateways;
     @Autowired FraudService fraud;
+    @Autowired FraudScoreRepo scores;
     @Autowired UserRepo users;
     @Autowired tn.vas.security.UserService userService;
 
@@ -147,6 +148,26 @@ class ChannelsTests {
         assertEquals(MoOutcome.ROUTED, outcomes.get(0));
         assertEquals(MoOutcome.LIMIT_REACHED, outcomes.get(1));
         assertEquals(new BigDecimal("20.000"), ledger.spentSince("+216" + from, Instant.now().minusSeconds(3600)).setScale(3));
+    }
+
+    @Test
+    void riskScoreIsExplainableAndFlagsOutliers() throws Exception {
+        var calm = new tn.vas.fraud.FraudScoring.Features(1, 0.0, 1, 0.1, 3, 0, 0, 0, true);
+        assertEquals(0, tn.vas.fraud.FraudScoring.score(tn.vas.fraud.FraudScoring.points(calm)));   // nouveau numéro sans comportement suspect : 0
+        var bad = new tn.vas.fraud.FraudScoring.Features(40, 6.0, 6, 0.9, 40, 35, 30, 3, true);
+        var pts = tn.vas.fraud.FraudScoring.points(bad);
+        assertEquals(java.util.Set.of("volume", "dispersion", "depense", "sondage", "horaire", "paiement", "nouveaute"), pts.keySet());
+        assertEquals(100, tn.vas.fraud.FraudScoring.score(pts));
+        // sur la base : une population calme et un numéro qui sonde des mots-clés au hasard
+        for (int i = 0; i < 20; i++) mo(msisdn(), "VOTE A");
+        String prober = msisdn();
+        for (int i = 0; i < 9; i++) mo(prober, "XQ" + i);   // sous le seuil de vitesse : seul le score peut le repérer
+        var res = JSON.readTree(mvc.perform(post("/admin/fraud/scores/run").with(httpBasic("admin", PW))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertTrue(res.has("flagged"));
+        mvc.perform(get("/admin/fraud/scores").with(httpBasic("admin", PW))).andExpect(status().isOk()).andExpect(jsonPath("$[0].features").exists());
+        var top = scores.findByMsisdn("+216" + prober).orElseThrow();
+        assertTrue(top.getScore() >= 40, top.getFeatures());   // sondage (35) + nouveau numéro (5), plus l'écart de volume selon la population
+        assertTrue(top.getFeatures().contains("sondage"), top.getFeatures());
     }
 
     // ---------------------------------------------------------------- USSD / IVR
@@ -383,6 +404,45 @@ class ChannelsTests {
         assertEquals(Channel.RCS, mts.findTop100ByMsisdnOrderByCreatedAtDesc("+216" + from).get(0).getChannel());
     }
 
+    @Test
+    void whatsappTemplatesRequireApprovalAndOptInAndStopRevokes() throws Exception {
+        if (users.findByUsername("admin2").isEmpty()) userService.create("admin2", PW, java.util.List.of("SUPER_ADMIN"), null);
+        var p = partner();
+        var svc = service("Promo " + sn, ServiceType.ALERT, p);
+        var ch = new ChatChannel();
+        ch.setKind(Channel.WHATSAPP);
+        ch.setAddress("pn-tpl-" + sn);
+        ch.setShortCode(sc);
+        chats.save(ch);
+        String decl = "{\"serviceId\":" + svc.getId() + ",\"name\":\"promo_" + sn + "\",\"lang\":\"fr\",\"category\":\"MARKETING\",\"body\":\"Bonjour {{1}}, -{{2}} % aujourd'hui\"}";
+        var tpl = JSON.readTree(mvc.perform(post("/admin/channels/templates").with(httpBasic("admin", PW)).contentType(MediaType.APPLICATION_JSON).content(decl))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertEquals(2, tpl.path("paramCount").asInt());
+        String key = apiKey(p, "chat:send"), from = msisdn();
+        String send = "{\"to\":\"" + from + "\",\"serviceId\":" + svc.getId() + ",\"template\":\"promo_" + sn + "\",\"lang\":\"fr\",\"params\":[\"Sami\",\"20\"]}";
+        // non approuvé
+        mvc.perform(post("/api/v1/chat/messages").header("X-API-Key", key).contentType(MediaType.APPLICATION_JSON).content(send)).andExpect(status().isUnprocessableEntity());
+        mvc.perform(post("/admin/channels/templates/" + tpl.path("id").asLong() + "/approve").with(httpBasic("admin", PW))).andExpect(status().isForbidden());   // auteur
+        mvc.perform(post("/admin/channels/templates/" + tpl.path("id").asLong() + "/approve").with(httpBasic("admin2", PW))).andExpect(status().isOk());
+        // sans accord WhatsApp de l'abonné
+        mvc.perform(post("/api/v1/chat/messages").header("X-API-Key", key).contentType(MediaType.APPLICATION_JSON).content(send)).andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/chat/optins").header("X-API-Key", key).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"msisdn\":\"" + from + "\",\"serviceId\":" + svc.getId() + ",\"proof\":\"case cochée sur le site, 2026-10-15 10:00\"}")).andExpect(status().isCreated());
+        mvc.perform(post("/api/v1/chat/messages").header("X-API-Key", key).contentType(MediaType.APPLICATION_JSON).content(send.replace(",\"20\"", "")))
+                .andExpect(status().isUnprocessableEntity());   // nombre de paramètres
+        mvc.perform(post("/api/v1/chat/messages").header("X-API-Key", key).contentType(MediaType.APPLICATION_JSON).content(send)).andExpect(status().isAccepted());
+        var m = mts.findTop100ByMsisdnOrderByCreatedAtDesc("+216" + from).get(0);
+        assertEquals(Channel.WHATSAPP, m.getChannel());
+        assertEquals("Bonjour Sami, -20 % aujourd'hui", m.getContent());
+        assertTrue(m.getPayload().contains("promo_" + sn));
+        assertFalse(m.isBillable());
+        // STOP reçu sur WhatsApp : plus d'envoi par modèle
+        String stop = "{\"entry\":[{\"changes\":[{\"value\":{\"metadata\":{\"phone_number_id\":\"pn-tpl-" + sn + "\"},"
+                + "\"messages\":[{\"from\":\"216" + from + "\",\"id\":\"wamid.stop" + sn + "\",\"type\":\"text\",\"text\":{\"body\":\"STOP\"}}]}}]}]}";
+        mvc.perform(post("/hooks/whatsapp").header("X-Hub-Signature-256", sign("test-app-secret", stop)).contentType(MediaType.APPLICATION_JSON).content(stop)).andExpect(status().isOk());
+        mvc.perform(post("/api/v1/chat/messages").header("X-API-Key", key).contentType(MediaType.APPLICATION_JSON).content(send)).andExpect(status().isForbidden());
+    }
+
     // ---------------------------------------------------------------- BI
 
     @Test
@@ -395,6 +455,33 @@ class ChannelsTests {
         mvc.perform(get("/admin/analytics/export").param("dimension", "operator").param("format", "csv").with(httpBasic("admin", PW))).andExpect(status().isOk());
         mvc.perform(get("/admin/analytics").param("from", "2020-01-01").param("to", "2026-01-01").with(httpBasic("admin", PW))).andExpect(status().isBadRequest());
         mvc.perform(get("/admin/analytics/export").param("dimension", "x").with(httpBasic("admin", PW))).andExpect(status().isBadRequest());
+    }
+
+    @Autowired tn.vas.query.AnalyticsQueries analytics;
+    @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
+
+    @Test
+    void dataWarehouseEtlIsIdempotentAndMatchesTheLedger() throws Exception {
+        String from = msisdn();
+        mo(from, "VOTE A");
+        var m = mts.findTop100ByMsisdnOrderByCreatedAtDesc("+216" + from).get(0);
+        mvc.perform(post("/callbacks/dlr").param("secret", "test-secret").param("cid", m.getCorrelationId()).param("message_status", "DELIVRD")).andExpect(status().isOk());
+        String today = java.time.LocalDate.now().toString();
+        mvc.perform(post("/admin/dwh/etl").param("from", today).param("to", today).with(httpBasic("admin", PW))).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("OK"));
+        var p = analytics.period(java.time.LocalDate.now(), java.time.LocalDate.now());
+        BigDecimal ledgerTotal = jdbc.queryForObject("select coalesce(sum(gross_amount),0) from ledger_event where billing_status = 'CHARGED' and created_at >= ? and created_at < ?",
+                BigDecimal.class, p.from(), p.to());
+        BigDecimal dwTotal = jdbc.queryForObject("select coalesce(sum(gross),0) from dw_fact_billing where status = 'CHARGED' and fact_day = ?", BigDecimal.class, java.sql.Date.valueOf(today));
+        assertEquals(0, ledgerTotal.compareTo(dwTotal), "entrepôt = ledger");
+        assertTrue(dwTotal.signum() > 0);
+        // relance : mêmes totaux (rechargement du jour, pas d'accumulation)
+        mvc.perform(post("/admin/dwh/etl").param("from", today).param("to", today).with(httpBasic("admin", PW))).andExpect(status().isOk());
+        assertEquals(0, dwTotal.compareTo(jdbc.queryForObject("select coalesce(sum(gross),0) from dw_fact_billing where status = 'CHARGED' and fact_day = ?", BigDecimal.class, java.sql.Date.valueOf(today))));
+        var byService = analytics.revenueDwh(p, "service");
+        assertTrue(byService.stream().anyMatch(r -> r.get("service").equals(vote.getName())));
+        assertTrue(jdbc.queryForObject("select count(*) from dw_fact_traffic where fact_day = ? and kind = 'MO' and channel = 'SMS'", Long.class, java.sql.Date.valueOf(today)) > 0);
+        mvc.perform(get("/admin/analytics/dwh/runs").with(httpBasic("admin", PW))).andExpect(status().isOk()).andExpect(jsonPath("$[0].status").exists());
+        mvc.perform(get("/admin/analytics/dwh/export").param("table", "billing").param("from", today).param("to", today).with(httpBasic("admin", PW))).andExpect(status().isOk());
     }
 
     // ---------------------------------------------------------------- production

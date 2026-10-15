@@ -117,6 +117,12 @@ public class FraudService {
         alert(rule, msisdn, svc, detail);
     }
 
+    /** Alerte seule (sans blocage), pour un module externe (ex. score de risque au-dessus du seuil d'alerte). */
+    @Transactional
+    public void raise(String rule, String msisdn, VasService svc, String detail) {
+        alert(rule, msisdn, svc, detail);
+    }
+
     private void alert(String rule, String msisdn, VasService svc, String detail) {
         var now = clock.instant();
         // une alerte par règle et par numéro (ou service) toutes les 10 minutes : pas d'inondation pendant une attaque
@@ -143,12 +149,23 @@ public class FraudService {
         Instant hourAgo = now.minus(Duration.ofHours(1));
         Map<Long, Long> last = toMap(mos.countByServiceBetween(hourAgo, now));
         Map<Long, Long> before = toMap(mos.countByServiceBetween(hourAgo.minus(Duration.ofHours(24)), hourAgo));
+        // écart-type horaire par service sur les 24 heures précédentes (z-score) en plus du rapport à la moyenne
+        Map<Long, double[]> hourly = new HashMap<>();
+        for (int h = 1; h <= 24; h++) {
+            Instant to = hourAgo.minus(Duration.ofHours(h - 1)), from = to.minus(Duration.ofHours(1));
+            for (var e : toMap(mos.countByServiceBetween(from, to)).entrySet()) hourly.computeIfAbsent(e.getKey(), k -> new double[24])[h - 1] = e.getValue();
+        }
         int n = 0;
         for (var e : last.entrySet()) {
             double avg = before.getOrDefault(e.getKey(), 0L) / 24.0;
-            if (e.getValue() >= props.spikeMinVolume() && e.getValue() > props.spikeFactor() * Math.max(avg, 1.0)) {
+            double[] series = hourly.getOrDefault(e.getKey(), new double[24]);
+            double sd = Math.sqrt(java.util.Arrays.stream(series).map(v -> (v - avg) * (v - avg)).average().orElse(0));
+            double z = (e.getValue() - avg) / Math.max(sd, Math.max(1.0, Math.sqrt(avg)));
+            boolean ratio = e.getValue() > props.spikeFactor() * Math.max(avg, 1.0);
+            if (e.getValue() >= props.spikeMinVolume() && (ratio || z >= props.spikeZ())) {
                 var svc = services.findById(e.getKey()).orElse(null);
-                alert(TRAFFIC_SPIKE, null, svc, String.format("%d MO sur la dernière heure, moyenne %.1f/h sur 24 h (seuil x%.1f)", e.getValue(), avg, props.spikeFactor()));
+                alert(TRAFFIC_SPIKE, null, svc, String.format("%d MO sur la dernière heure, moyenne %.1f/h sur 24 h, z = %.1f (seuils x%.1f ou z %.1f)",
+                        e.getValue(), avg, z, props.spikeFactor(), props.spikeZ()));
                 n++;
             }
         }

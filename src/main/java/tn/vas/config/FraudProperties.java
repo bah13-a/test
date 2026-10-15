@@ -15,4 +15,7 @@ public record FraudProperties(@DefaultValue("true") boolean enabled,
                               @DefaultValue("30") BigDecimal dailySpendLimit,
                               @DefaultValue("60") int blockMinutes,
                               @DefaultValue("5") double spikeFactor,
-                              @DefaultValue("100") int spikeMinVolume) {}
+                              @DefaultValue("100") int spikeMinVolume,
+                              @DefaultValue("4") double spikeZ,
+                              @DefaultValue("60") int scoreAlert,
+                              @DefaultValue("85") int scoreBlock) {}

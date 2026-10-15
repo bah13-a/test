@@ -25,6 +25,8 @@ public class FraudController {
     private final FraudBlockRepo blocks;
     private final AuditService audit;
     private final Clock clock;
+    @org.springframework.beans.factory.annotation.Autowired private tn.vas.repo.Repos.FraudScoreRepo scores;
+    @org.springframework.beans.factory.annotation.Autowired private tn.vas.fraud.FraudScoring scoring;
 
     public FraudController(FraudAlertRepo alerts, FraudBlockRepo blocks, AuditService audit, Clock clock) {
         this.alerts = alerts;
@@ -75,5 +77,20 @@ public class FraudController {
         b.setLiftedBy(auth.getName());
         blocks.save(b);
         audit.log("FRAUD_BLOCK_LIFT", "fraud_block:" + id, b.getRule());
+    }
+
+    /** Scores de risque des dernières 24 h, du plus élevé au plus faible, avec les points qui les expliquent. */
+    @GetMapping("/scores")
+    @PreAuthorize(READ)
+    public List<Map<String, Object>> scores() {
+        return scores.findTop100ByComputedAtAfterOrderByScoreDesc(clock.instant().minus(java.time.Duration.ofHours(24))).stream()
+                .map(x -> Map.<String, Object>of("id", x.getId(), "msisdn", Views.mask(x.getMsisdn()), "score", x.getScore(), "decision", x.getDecision(),
+                        "features", x.getFeatures(), "computedAt", x.getComputedAt())).toList();
+    }
+
+    @PostMapping("/scores/run")
+    @PreAuthorize(WRITE)
+    public Map<String, Object> runScoring() {
+        return Map.of("flagged", scoring.run());
     }
 }

@@ -200,5 +200,19 @@ await fetch(SIM + '/tps?v=0');
   ok(bi && bi.kpis && Array.isArray(bi.revenueByDay) && bi.channels.some((c) => c.channel === 'MO USSD'), 'décisionnel sur PostgreSQL : indicateurs et volume MO USSD');
   ok(Array.isArray(await A('/admin/fraud/alerts')) && Array.isArray(await A('/admin/fraud/blocks')), 'antifraude : écrans lisibles sur PostgreSQL');
 }
+// ---------- options avancées sur PostgreSQL réel : entrepôt (ETL), scoring antifraude, modèles WhatsApp ----------
+{
+  const day = new Date().toISOString().slice(0, 10);
+  const etl = await A(`/admin/dwh/etl?from=${day}&to=${day}`, 'POST');
+  ok(etl && etl.status === 'OK' && etl.rows > 0, 'entrepôt de données : ETL du jour chargé sur PostgreSQL (' + (etl && etl.rows) + ' lignes)');
+  const runs = await A('/admin/analytics/dwh/runs');
+  ok(Array.isArray(runs) && runs.length > 0, 'entrepôt : historique des chargements');
+  const sc = await A('/admin/fraud/scores/run', 'POST');
+  ok(sc && typeof sc.flagged === 'number', 'scoring antifraude exécuté sur PostgreSQL');
+  ok(Array.isArray(await A('/admin/fraud/scores')), 'scores de risque lisibles');
+  const tpl = await A('/admin/channels/templates', 'POST', { serviceId: svc.id, name: 'it_rappel', lang: 'fr', category: 'UTILITY', body: 'Rappel {{1}}' });
+  ok(tpl && tpl.paramCount === 1, 'modèle WhatsApp déclaré (1 paramètre)');
+  ok(Array.isArray((await A('/admin/smpp/clients')).clients), 'accès SMPP des clients lisibles');
+}
 console.log(failed === 0 ? '\nINTÉGRATION COMPLÈTE : TOUT EST OK' : `\n${failed} ÉCHEC(S)`);
 process.exit(failed === 0 ? 0 : 1);

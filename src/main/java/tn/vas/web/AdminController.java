@@ -42,6 +42,7 @@ public class AdminController {
     private final SubscriptionRepo subs;
     private final AuditRepo auditRepo;
     private final ApiClientRepo apiClients;
+    @org.springframework.beans.factory.annotation.Autowired private tn.vas.smpp.SmppServer smppServer;
     private final ReplyRepo replies;
     private final RuleRepo rules;
     private final UserRepo users;
@@ -287,6 +288,7 @@ public class AdminController {
         var c = apiClients.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         c.setActive(false);
         apiClients.save(c);
+        smppServer.disconnect(id);
         audit.log("API_CLIENT_REVOKE", "client:" + id, null);
         return ResponseEntity.noContent().build();
     }

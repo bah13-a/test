@@ -26,7 +26,7 @@ function menu(me) {
   if (has(me, 'SUPER_ADMIN', 'FINANCE', 'AUDITOR')) m.push(['billing', 'billing', () => <Billing canWrite={has(me, 'SUPER_ADMIN', 'FINANCE')} />]);
   if (has(me, 'SUPER_ADMIN', 'FINANCE', 'AUDITOR')) m.push(['reconciliation', 'reconciliation', () => <P.Reconciliation />]);
   if (has(me, 'SUPER_ADMIN', 'FINANCE', 'VAS_MANAGER', 'AUDITOR')) m.push(['analytics', 'analytics', () => <Analytics />]);
-  if (has(me, 'SUPER_ADMIN', 'NOC', 'VAS_MANAGER', 'SUPPORT', 'AUDITOR')) m.push(['channels', 'channels', () => <Channels canWrite={has(me, 'SUPER_ADMIN', 'VAS_MANAGER')} />]);
+  if (has(me, 'SUPER_ADMIN', 'NOC', 'VAS_MANAGER', 'SUPPORT', 'AUDITOR')) m.push(['channels', 'channels', () => <Channels canWrite={has(me, 'SUPER_ADMIN', 'VAS_MANAGER')} isAdmin={has(me, 'SUPER_ADMIN')} />]);
   if (has(me, 'SUPER_ADMIN', 'FINANCE', 'AUDITOR', 'SUPPORT')) m.push(['dcb', 'dcb', () => <Dcb canRefund={has(me, 'SUPER_ADMIN', 'FINANCE')} />]);
   if (has(me, 'SUPER_ADMIN', 'NOC', 'VAS_MANAGER', 'AUDITOR')) m.push(['fraud', 'fraud', () => <Fraud canWrite={has(me, 'SUPER_ADMIN', 'NOC', 'VAS_MANAGER')} />]);
   if (has(me, 'SUPER_ADMIN', 'VAS_MANAGER', 'SUPPORT')) m.push(['rules', 'rules', () => <P.Rules />]);

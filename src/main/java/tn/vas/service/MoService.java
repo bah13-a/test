@@ -172,6 +172,7 @@ public class MoService {
             }
         }
         webhooks.enqueueMo(mo, svc);
+        events.publishEvent(new tn.vas.event.DomainEvents.MoRouted(mo.getId(), svc.getId()));
         return MoOutcome.ROUTED;
     }
 
@@ -200,6 +201,7 @@ public class MoService {
         if (r == null) return MoOutcome.UNKNOWN_KEYWORD;
         reply(mo, svc, r.text(), r.billing());
         webhooks.enqueueMo(mo, svc);
+        events.publishEvent(new tn.vas.event.DomainEvents.MoRouted(mo.getId(), svc.getId()));
         return MoOutcome.ROUTED;
     }
 

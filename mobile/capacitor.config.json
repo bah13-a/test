@@ -1,0 +1,20 @@
+{
+  "appId": "tn.vas.backoffice",
+  "appName": "VAS",
+  "webDir": "www",
+  "server": {
+    "url": "https://vas.example.tn/",
+    "cleartext": false,
+    "allowNavigation": [
+      "vas.example.tn"
+    ]
+  },
+  "android": {
+    "allowMixedContent": false,
+    "webContentsDebuggingEnabled": false
+  },
+  "ios": {
+    "contentInset": "automatic",
+    "limitsNavigationsToAppBoundDomains": true
+  }
+}

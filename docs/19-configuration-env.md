@@ -35,6 +35,10 @@ docker compose run --rm jasmin-provision
 | Antifraude | `FRAUD_ENABLED`, `FRAUD_MO_PER_MINUTE`, `FRAUD_MO_PER_HOUR`, `FRAUD_DAILY_SPEND_LIMIT`, `FRAUD_BLOCK_MINUTES`, `FRAUD_SPIKE_*` | Politique du client (valeurs par défaut prudentes) |
 | Paiement sur facture (DCB) | `DCB_MODE`, `DCB_OTP_*`, `DCB_TIMEOUT_SECONDS`, `{OP}_DCB_URL`, `{OP}_DCB_TOKEN` | Contrat DCB de chaque opérateur |
 | WhatsApp / RCS | `CHAT_MODE`, `WHATSAPP_*`, `RCS_*` | Compte Meta Business, fournisseur RCS (voir `20-options-canaux-antifraude-bi.md`) |
+| Serveur SMPP clients | `SMPP_SERVER_ENABLED`, `SMPP_SERVER_PORT`, `SMPP_SERVER_BIND` ; accès par client dans l'écran Canaux | Contrats partenaires, VPN partenaires |
+| Scoring antifraude | `FRAUD_SPIKE_Z`, `FRAUD_SCORE_ALERT`, `FRAUD_SCORE_BLOCK`, `FRAUD_SCORE_CRON` | Calibrage sur l'historique |
+| Entrepôt de données | `DWH_ETL_CRON`, `DWH_ETL_DAYS` | - |
+| Applications mobiles | `MOBILE_APP_ID`, `MOBILE_APP_NAME` (+ `PUBLIC_HOSTNAME`) | Comptes Google Play / Apple du client |
 | USSD / IVR | aucun secret supplémentaire (`CALLBACK_SECRET`) ; menus saisis dans l'écran Canaux | Codes USSD et numéros IVR attribués par les opérateurs |
 | Réglages | `SESSION_TTL_MINUTES`, `PASSWORD_MIN_LENGTH`, `AUTH_THROTTLE_PER_MINUTE`, `MT_*`, `MO_DEDUP_SECONDS`, `DLR_TIMEOUT_HOURS`, `RATE_SAFETY_FACTOR`, `SUBSCRIPTION_*`, `*_CRON`, `DB_POOL_*`, `JAVA_*`, `LOG_LEVEL*` | Valeurs par défaut sûres |
 

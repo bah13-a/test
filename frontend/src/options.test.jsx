@@ -22,7 +22,7 @@ const OVERVIEW = {
 
 describe('Décisionnel', () => {
   it('affiche les indicateurs, change d axe et garde un tableau équivalent au graphique', async () => {
-    vi.spyOn(globalThis, 'fetch').mockImplementation(() => json(OVERVIEW));
+    vi.spyOn(globalThis, 'fetch').mockImplementation((url) => json(String(url).startsWith('/admin/analytics/dwh/runs') ? [] : OVERVIEW));
     render(<Analytics />);
     expect(await screen.findByText('125.500 TND')).toBeInTheDocument();
     expect(screen.getByText('7.0 %')).toBeInTheDocument();
@@ -31,6 +31,7 @@ describe('Décisionnel', () => {
     expect(screen.getByRole('tab', { name: 'Par opérateur' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('TT')).toBeInTheDocument();
     expect(screen.getByText('Sessions USSD')).toBeInTheDocument();
+    expect(screen.getByText('tables de production')).toBeInTheDocument();   // source des montants affichée
   });
 });
 
@@ -54,6 +55,26 @@ describe('Canaux', () => {
     render(<ConfirmProvider><Channels canWrite={false} /></ConfirmProvider>);
     expect(await screen.findByText('Menus interactifs')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Créer' })).toBeNull();
+  });
+});
+
+describe('Accès SMPP', () => {
+  it('affiche le mot de passe généré une seule fois après attribution', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((url, init) => {
+      const u = String(url);
+      if (u === '/admin/smpp/clients' && init?.method !== 'POST') return json({ enabled: true, port: 2777, clients: [] });
+      if (u.startsWith('/admin/api-clients')) return json([{ id: 3, name: 'agregateur', active: true }]);
+      if (u === '/admin/smpp/clients/3' && init?.method === 'POST') return json({ systemId: 'agg1', password: 'Ab3dEf7h', port: 2777 });
+      return json([]);
+    });
+    render(<ConfirmProvider><Channels canWrite isAdmin /></ConfirmProvider>);
+    expect(await screen.findByText('Accès SMPP des clients')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('option', { name: 'agregateur' })).toBeInTheDocument());
+    const form = screen.getByRole('button', { name: 'Attribuer' }).closest('form');
+    await userEvent.selectOptions(form.querySelector('select'), '3');
+    await userEvent.type(form.querySelector('input[type="text"]'), 'agg1');
+    await userEvent.click(screen.getByRole('button', { name: 'Attribuer' }));
+    expect(await screen.findByText('Ab3dEf7h')).toBeInTheDocument();
   });
 });
 

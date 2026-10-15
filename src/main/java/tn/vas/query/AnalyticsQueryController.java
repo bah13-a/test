@@ -35,4 +35,20 @@ public class AnalyticsQueryController {
         var p = q.period(from, to);
         return Exports.respond(format, "ca-par-" + dimension, "Chiffre d'affaires facturé par " + dimension + " (" + p.fromDay() + " → " + p.toDay() + ")", q.revenue(p, dimension));
     }
+
+    @GetMapping("/dwh/runs")
+    @PreAuthorize(BI)
+    public java.util.List<Map<String, Object>> runs() {
+        return q.etlRuns();
+    }
+
+    /** Extraction CSV / XLSX d'une table de faits de l'entrepôt (billing, traffic, subscription). */
+    @GetMapping("/dwh/export")
+    @PreAuthorize(BI)
+    public ResponseEntity<byte[]> dwhExport(@RequestParam String table, @RequestParam(defaultValue = "csv") String format,
+                                            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+                                            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) throws IOException {
+        var p = q.period(from, to);
+        return Exports.respond(format, "entrepot-" + table, "Entrepôt de données : " + table + " (" + p.fromDay() + " → " + p.toDay() + ")", q.dwhExtract(table, p));
+    }
 }

@@ -65,6 +65,10 @@ public final class Repos {
         List<MtMessage> findTop100ByOrderByCreatedAtDesc();
         List<MtMessage> findTop100ByMsisdnOrderByCreatedAtDesc(String msisdn);
         Optional<MtMessage> findBySmscMessageId(String id);
+        @Query("select m from MtMessage m where m.apiClientId = :c and m.smppDlr = true and m.smppDlrSent = false and m.status in "
+                + "(tn.vas.domain.Enums.MtStatus.DELIVERED, tn.vas.domain.Enums.MtStatus.EXPIRED, tn.vas.domain.Enums.MtStatus.UNDELIVERABLE, "
+                + "tn.vas.domain.Enums.MtStatus.REJECTED, tn.vas.domain.Enums.MtStatus.FAILED, tn.vas.domain.Enums.MtStatus.UNKNOWN) order by m.id")
+        List<MtMessage> pendingSmppDlr(@Param("c") Long apiClientId);
         List<MtMessage> findByStatusAndCreatedAtBefore(Enums.MtStatus s, Instant before);
         List<MtMessage> findTop500ByStatusAndUpdatedAtBefore(Enums.MtStatus s, Instant before);
         @Query("select m.status, count(m) from MtMessage m where m.service = :s group by m.status")
@@ -86,6 +90,8 @@ public final class Repos {
     }
 
     public interface ConsentRepo extends JpaRepository<ConsentRecord, Long> {
+        /** Dernier consentement (tous canaux) d'un numéro pour un service : le plus récent fait foi. */
+        Optional<ConsentRecord> findTopByMsisdnAndServiceOrderByAtDescIdDesc(String msisdn, VasService service);
         List<ConsentRecord> findByMsisdnAndServiceOrderByAtAsc(String msisdn, VasService s);
     }
 
@@ -136,6 +142,8 @@ public final class Repos {
 
     public interface ApiClientRepo extends JpaRepository<ApiClient, Long> {
         Optional<ApiClient> findByKeyHashAndActiveTrue(String hash);
+        Optional<ApiClient> findBySmppSystemIdAndActiveTrue(String systemId);
+        List<ApiClient> findByPartnerAndSmppMoTrueAndActiveTrue(Partner partner);
     }
 
     public interface AuditRepo extends JpaRepository<AuditLog, Long> {}
@@ -246,5 +254,15 @@ public final class Repos {
     public interface ChatChannelRepo extends JpaRepository<ChatChannel, Long> {
         Optional<ChatChannel> findByKindAndAddressAndActiveTrue(Enums.Channel kind, String address);
         List<ChatChannel> findByKindAndActiveTrue(Enums.Channel kind);
+    }
+
+    public interface ChatTemplateRepo extends JpaRepository<ChatTemplate, Long> {
+        Optional<ChatTemplate> findByServiceAndNameAndLang(VasService service, String name, String lang);
+        List<ChatTemplate> findAllByOrderByIdDesc();
+    }
+
+    public interface FraudScoreRepo extends JpaRepository<FraudScore, Long> {
+        Optional<FraudScore> findByMsisdn(String msisdn);
+        List<FraudScore> findTop100ByComputedAtAfterOrderByScoreDesc(Instant after);
     }
 }

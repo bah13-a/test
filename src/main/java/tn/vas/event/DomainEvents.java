@@ -21,4 +21,10 @@ public final class DomainEvents {
     /** Un événement de facturation est créé (from == null) ou change de statut. createdAt = date de création de l'événement. */
     public record LedgerChanged(Instant createdAt, Long serviceId, BillingStatus from, BillingStatus to,
                                 BigDecimal gross, BigDecimal partnerShare, BigDecimal providerShare) {}
+
+    /** Un MT d'un client API a atteint un statut final (accusé SMPP à remettre si demandé). */
+    public record MtFinal(String correlationId) {}
+
+    /** Un MO a été routé vers un service (remise éventuelle aux clients SMPP du partenaire). */
+    public record MoRouted(long moId, long serviceId) {}
 }

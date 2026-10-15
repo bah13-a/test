@@ -59,6 +59,8 @@ services:
       TZ: "${TZ:-Africa/Tunis}"
     # données de démarrage (plages de numéros, numéros portés, catalogue) : déposer les fichiers dans ./data et y faire référence dans le .env (/data/...)
     volumes: ["./data:/data:ro"]
+    # serveur SMPP pour clients externes (SMPP_SERVER_ENABLED=true) : publié sur l'interface du VPN partenaires uniquement
+    ports: ["${SMPP_SERVER_BIND:-127.0.0.1}:${SMPP_SERVER_PORT:-2777}:${SMPP_SERVER_PORT:-2777}"]
     depends_on:
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }

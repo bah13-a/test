@@ -44,8 +44,20 @@ public class ChatGateways {
     private SendResult whatsapp(MtMessage m) {
         var wa = props.whatsapp();
         if (wa == null || wa.phoneNumberId() == null || wa.token() == null) return SendResult.fail("WhatsApp non configuré", false);
-        var body = Map.of("messaging_product", "whatsapp", "recipient_type", "individual", "to", digits(m.getMsisdn()), "type", "text",
+        Object body = Map.of("messaging_product", "whatsapp", "recipient_type", "individual", "to", digits(m.getMsisdn()), "type", "text",
                 "text", Map.of("preview_url", false, "body", m.getContent()));
+        if (m.getPayload() != null) {   // modèle approuvé : envoi hors fenêtre de 24 h
+            try {
+                var p = JSON.readTree(m.getPayload());
+                var params = new java.util.ArrayList<Map<String, Object>>();
+                p.path("params").forEach(x -> params.add(Map.of("type", "text", "text", x.asText())));
+                body = Map.of("messaging_product", "whatsapp", "to", digits(m.getMsisdn()), "type", "template",
+                        "template", Map.of("name", p.path("template").asText(), "language", Map.of("code", p.path("lang").asText()),
+                                "components", params.isEmpty() ? java.util.List.of() : java.util.List.of(Map.of("type", "body", "parameters", params))));
+            } catch (Exception e) {
+                return SendResult.fail("modèle illisible : " + e.getMessage(), false);
+            }
+        }
         return post(wa.base() + "/" + wa.phoneNumberId() + "/messages", wa.token(), body, "messages");
     }
 

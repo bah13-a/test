@@ -27,7 +27,22 @@ export function Fraud({ canWrite }) {
         <Table caption={t('fraudBlocks')} cols={['msisdn', 'rule', 'reason', 'createdAt', 'untilAt', ...(canWrite ? ['actions'] : [])]} labels={{ actions: t('actions') }}
           rows={blocks.data} render={{ actions: (b) => <Btn disabled={busy} onClick={() => lift(b)}>{t('lift')}</Btn> }} />
       </Card>
+      <RiskScores canWrite={canWrite} />
     </>
+  );
+}
+
+/** Scores de risque : chaque score est accompagné des points qui l'expliquent. */
+function RiskScores({ canWrite }) {
+  const [sc, reload] = useLoad(() => api('/admin/fraud/scores'));
+  const [msg, run, busy] = useAction();
+  const explain = (x) => { try { return Object.entries(JSON.parse(x.features).points || {}).map(([k, v]) => `${k} +${v}`).join(', '); } catch { return ''; } };
+  return (
+    <Card title={t('riskScores')}>
+      <Flash {...msg} />
+      {canWrite && <Btn disabled={busy} onClick={() => run(() => api('/admin/fraud/scores/run', { method: 'POST' }), reload)}>{t('runScoring')}</Btn>}
+      <Table caption={t('riskScores')} cols={['msisdn', 'score', 'decision', 'features', 'computedAt']} rows={(sc.data || []).map((x) => ({ ...x, features: explain(x) }))} />
+    </Card>
   );
 }
 
@@ -97,16 +112,32 @@ export function Analytics() {
           <Card title={t('channelsVolume')}>
             <Table caption={t('channelsVolume')} cols={['channel', 'count', 'detail']} rows={data.channels.map((r) => ({ ...r, id: r.channel }))} />
           </Card>
+          <Warehouse range={range} source={data.source} />
         </>
       )}
     </>
   );
 }
 
+/** Entrepôt de données : source des montants, historique des chargements, rechargement d'une période, extractions pour un outil BI. */
+function Warehouse({ range, source }) {
+  const [runs, reload] = useLoad(() => api('/admin/analytics/dwh/runs'));
+  const [msg, run, busy] = useAction();
+  return (
+    <Card title={t('dwh')}>
+      <Flash {...msg} />
+      <p>{t('dwhSource')} : <b>{source === 'dwh' ? t('dwhWarehouse') : t('dwhLive')}</b></p>
+      <Btn disabled={busy} onClick={() => run(() => api(`/admin/dwh/etl?${qs(range)}`, { method: 'POST' }), reload)}>{t('runEtl')}</Btn>{' '}
+      {['billing', 'traffic', 'subscription'].map((tb) => <button key={tb} type="button" className="btn sm ghost" onClick={() => run(() => download(`/admin/analytics/dwh/export?${qs({ ...range, table: tb, format: 'csv' })}`, `entrepot-${tb}.csv`))}>{t('dwhExport')} {tb}</button>)}
+      <Table caption={t('etlRuns')} cols={['started_at', 'finished_at', 'from_day', 'to_day', 'rows_loaded', 'status', 'error']} rows={(runs.data || []).map((r) => ({ ...r, id: r.id ?? r.ID }))} />
+    </Card>
+  );
+}
+
 const SAMPLE_MENU = '{"text":"Bienvenue\\n1. Voter\\n2. Info","options":{"1":{"text":"Vote A enregistre","action":"KEYWORD","param":"VOTE A"},"2":{"text":"Info du jour","action":"CHARGE"}}}';
 
 /** Canaux : menus USSD / IVR (édition JSON validée par le serveur, aperçu sans effet) et comptes WhatsApp / RCS. */
-export function Channels({ canWrite }) {
+export function Channels({ canWrite, isAdmin }) {
   const [channel, setChannel] = useState('USSD');
   const [menus, reload] = useLoad(() => api('/admin/channels/menus?channel=' + channel), [channel]);
   const [chats, reloadChats] = useLoad(() => api('/admin/channels/chat'));
@@ -159,7 +190,64 @@ export function Channels({ canWrite }) {
             onSubmit={(v, done) => run(() => api('/admin/channels/chat', { method: 'POST', body: { ...v, shortCodeId: +v.shortCodeId } }), () => { done(); reloadChats(); })} />
         )}
       </Card>
+      <Templates canWrite={canWrite} services={services} />
+      {isAdmin && <SmppAccess />}
     </>
+  );
+}
+
+/** Modèles WhatsApp : déclaration (nom / langue identiques à Meta), approbation par une autre personne, retrait. */
+function Templates({ canWrite, services }) {
+  const [tp, reload] = useLoad(() => api('/admin/channels/templates'));
+  const [msg, run, busy] = useAction();
+  return (
+    <Card title={t('templates')}>
+      <Flash {...msg} />
+      <p className="muted">{t('templateHelp')}</p>
+      <Table caption={t('templates')} cols={['service', 'name', 'lang', 'category', 'body', 'paramCount', 'approved', 'createdBy', 'approvedBy', ...(canWrite ? ['actions'] : [])]} labels={{ actions: t('actions') }}
+        rows={tp.data} render={{ actions: (x) => (x.approved
+          ? <Btn disabled={busy} onClick={() => run(() => api('/admin/channels/templates/' + x.id, { method: 'DELETE' }), reload)}>{t('withdraw')}</Btn>
+          : <Btn disabled={busy} onClick={() => run(() => api(`/admin/channels/templates/${x.id}/approve`, { method: 'POST' }), reload)}>{t('approve')}</Btn>) }} />
+      {canWrite && (
+        <Form busy={busy} fields={[
+          { name: 'serviceId', label: t('services'), required: true, options: services },
+          { name: 'name', label: tc('name'), required: true, validate: (v) => (/^[a-z0-9_]+$/.test(v) ? null : t('invalidValue')) },
+          { name: 'lang', label: tc('lang'), required: true, options: ['fr', 'ar', 'en', 'en_US'] },
+          { name: 'category', label: tc('category'), required: true, options: ['UTILITY', 'MARKETING', 'AUTHENTICATION'] },
+          { name: 'body', label: tc('body'), required: true }]}
+          onSubmit={(v, done) => run(() => api('/admin/channels/templates', { method: 'POST', body: { ...v, serviceId: +v.serviceId } }), () => { done(); reload(); })} />
+      )}
+    </Card>
+  );
+}
+
+/** Accès SMPP des clients API (serveur SMPP v3.4 de la plateforme). */
+function SmppAccess() {
+  const [d, reload] = useLoad(() => api('/admin/smpp/clients'));
+  const [cl] = useLoad(() => api('/admin/api-clients?size=500'));
+  const [msg, run, busy] = useAction();
+  const [secret, setSecret] = useState(null);
+  const confirm = useConfirm();
+  const revoke = async (c) => { if (await confirm(t('revoke') + ' : ' + c.systemId + ' ?', { danger: true })) run(() => api('/admin/smpp/clients/' + c.id, { method: 'DELETE' }), reload); };
+  return (
+    <Card title={t('smppAccess')}>
+      <Flash {...msg} />
+      {d.data && !d.data.enabled && <p className="err">{t('smppDisabled')}</p>}
+      <p className="muted">{t('smppHelp')}</p>
+      {secret && <p role="status" className="okmsg">{t('smppPassword')} : <code>{secret.systemId}</code> / <code>{secret.password}</code> (port {secret.port})</p>}
+      <Table caption={t('smppAccess')} cols={['name', 'systemId', 'allowedIps', 'maxBinds', 'mo', 'bound', 'actions']} labels={{ actions: t('actions') }}
+        rows={d.data?.clients} render={{ actions: (c) => <Btn disabled={busy} onClick={() => revoke(c)}>{t('revoke')}</Btn> }} />
+      <Form busy={busy} submit={t('grant')} fields={[
+        { name: 'clientId', label: t('apiClients'), required: true, options: (cl.data || []).filter((c) => c.active).map((c) => ({ value: c.id, label: c.name })) },
+        { name: 'systemId', label: 'system_id', required: true, validate: (v) => (/^[A-Za-z0-9_]{3,15}$/.test(v) ? null : t('invalidValue')) },
+        { name: 'allowedIps', label: tc('allowedIps') },
+        { name: 'maxBinds', label: tc('maxBinds'), type: 'number', min: 1, max: 10 },
+        { name: 'mo', label: tc('mo'), type: 'checkbox' }]}
+        onSubmit={(v, done) => run(async () => {
+          const r = await api(`/admin/smpp/clients/${v.clientId}`, { method: 'POST', body: { systemId: v.systemId, allowedIps: v.allowedIps, maxBinds: v.maxBinds ? +v.maxBinds : undefined, mo: !!v.mo } });
+          setSecret(r);
+        }, () => { done(); reload(); })} />
+    </Card>
   );
 }
 

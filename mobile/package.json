@@ -1,0 +1,20 @@
+{
+  "name": "vas-mobile",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Applications natives Android / iOS de la plateforme VAS (back-office et portail partenaire), encapsulant l'interface web servie en HTTPS.",
+  "scripts": {
+    "config": "node configure.mjs",
+    "sync": "node configure.mjs && cap sync",
+    "android:apk": "node configure.mjs && cap sync android && cd android && ./gradlew assembleDebug",
+    "android:bundle": "node configure.mjs && cap sync android && cd android && ./gradlew bundleRelease"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.5.2",
+    "@capacitor/core": "8.5.2",
+    "@capacitor/ios": "8.5.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.2"
+  }
+}

@@ -98,6 +98,18 @@ vas:
     spike-factor: ${FRAUD_SPIKE_FACTOR:5}
     spike-min-volume: ${FRAUD_SPIKE_MIN_VOLUME:100}
     spike-cron: "${FRAUD_SPIKE_CRON:0 */10 * * * *}"
+    spike-z: ${FRAUD_SPIKE_Z:4}
+    score-alert: ${FRAUD_SCORE_ALERT:60}
+    score-block: ${FRAUD_SCORE_BLOCK:85}
+    score-cron: "${FRAUD_SCORE_CRON:0 */5 * * * *}"
+  # Serveur SMPP v3.4 pour clients externes (accès par client dans le back-office) ; exposer le port uniquement sur le VPN partenaires
+  smpp-server:
+    enabled: ${SMPP_SERVER_ENABLED:false}
+    port: ${SMPP_SERVER_PORT:2777}
+  # Entrepôt de données : rechargement nocturne des derniers jours
+  dwh:
+    etl-cron: "${DWH_ETL_CRON:0 45 3 * * *}"
+    etl-days: ${DWH_ETL_DAYS:3}
   # Paiement sur facture opérateur : disabled tant qu'aucun contrat DCB n'est signé ; http = API de chaque opérateur
   dcb:
     mode: ${DCB_MODE:disabled}

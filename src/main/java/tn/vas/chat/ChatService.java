@@ -29,8 +29,15 @@ public class ChatService {
     private final MoService mo;
     private final MtRepo mts;
     private final DlrService dlr;
+    private final tn.vas.repo.Repos.ServiceRepo services;
+    private final tn.vas.repo.Repos.ConsentRepo consents;
+    private final TemplateService templates;
 
-    public ChatService(ChatChannelRepo channels, MoService mo, MtRepo mts, DlrService dlr) {
+    public ChatService(ChatChannelRepo channels, MoService mo, MtRepo mts, DlrService dlr, tn.vas.repo.Repos.ServiceRepo services,
+                       tn.vas.repo.Repos.ConsentRepo consents, TemplateService templates) {
+        this.services = services;
+        this.consents = consents;
+        this.templates = templates;
         this.channels = channels;
         this.mo = mo;
         this.mts = mts;
@@ -46,8 +53,26 @@ public class ChatService {
             return null;
         }
         var sc = ch.getShortCode();
-        return mo.handle(sc.getOperator().getCode(), msisdn, sc.getNumber(), text == null ? "" : text,
+        MoOutcome o = mo.handle(sc.getOperator().getCode(), msisdn, sc.getNumber(), text == null ? "" : text,
                 kind.name().toLowerCase() + "-" + providerMsgId, kind);
+        if (o == MoOutcome.STOPPED) revoke(msisdn, sc, kind);
+        return o;
+    }
+
+    /** STOP sur le canal : arrêt tracé pour chaque service du short code ayant un accord sur ce canal (les envois par modèle cessent). */
+    private void revoke(String msisdn, tn.vas.domain.ShortCode sc, Channel kind) {
+        for (var svc : services.findAll()) {
+            if (!svc.getShortCode().getId().equals(sc.getId()) || !templates.optedIn(msisdn, svc)) continue;
+            var c = new tn.vas.domain.ConsentRecord();
+            c.setMsisdn(msisdn);
+            c.setService(svc);
+            c.setAction("STOPPED");
+            c.setChannel(kind.name());
+            c.setProofText("STOP");
+            c.setTermsVersion("v1");
+            c.setAt(java.time.Instant.now());
+            consents.save(c);
+        }
     }
 
     /** Statut fournisseur (sent / delivered / read / failed) → même traitement qu'un accusé de remise SMS. */
