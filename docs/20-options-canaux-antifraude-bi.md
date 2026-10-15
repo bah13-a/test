@@ -21,7 +21,7 @@ Toutes les options sont **développées, testées et livrées** (`ChannelsTests`
 - **Vitesse** : au-delà de `FRAUD_MO_PER_MINUTE` MO par minute (ou `FRAUD_MO_PER_HOUR` par heure) pour un même numéro, le numéro est **bloqué** `FRAUD_BLOCK_MINUTES` minutes sur tous les canaux. Les MO refusés ont l'issue `FRAUD`. **STOP et AIDE ne sont jamais bloqués** (droit de désabonnement).
 - **Plafond de dépense** : `FRAUD_DAILY_SPEND_LIMIT` TND TTC par numéro et par jour, toutes actions facturées (SMS surtaxé, abonnement, USSD, IVR, DCB). L'action qui dépasserait le plafond est refusée (`LIMIT_REACHED` / 403 DCB).
 - **Pics** : toutes les 10 minutes (`FRAUD_SPIKE_CRON`), un service dont les MO de la dernière heure dépassent `FRAUD_SPIKE_FACTOR` fois sa moyenne horaire des 24 h (et au moins `FRAUD_SPIKE_MIN_VOLUME`) déclenche une alerte.
-- **Codes DCB** : `DCB_OTP_MAX_ATTEMPTS` codes faux bloquent le numéro (`OTP_ABUSE`).
+- **Codes DCB** : `DCB_OTP_MAX_ATTEMPTS` codes faux font échouer la transaction et lèvent une alerte `OTP_ABUSE` (sans bloquer le numéro : un partenaire ne doit pas pouvoir bloquer un abonné) ; les essais sont comptés sous verrou, même en cas d'appels simultanés.
 - **Scoring statistique** (toutes les 5 minutes, `FRAUD_SCORE_CRON`) : chaque numéro actif dans l'heure reçoit un score de 0 à 100, **expliqué** par ses points : volume (écart à la population active en écarts-types), dispersion sur plusieurs services, part du plafond de dépense consommée, sondage (part de MO refusés), activité nocturne, échecs de paiement DCB, nouveauté du numéro (aggravante seulement). Score ≥ `FRAUD_SCORE_ALERT` (60) : alerte ; ≥ `FRAUD_SCORE_BLOCK` (85) : blocage temporaire. Les **pics par service** combinent rapport à la moyenne et écart-type horaire (`FRAUD_SPIKE_Z`). Seuils à calibrer sur l'historique réel (distribution visible dans l'écran).
 - Alertes à **acquitter** (tracé dans l'audit), blocages **levables** à la main ; métrique `vas_fraud_alert_total{rule}` et alertes Prometheus `FraudAlerts` / `FraudSpikeBurst`.
 
@@ -74,7 +74,7 @@ Adaptateur `HttpChargingGateway` : `POST {OP}_DCB_URL/charge` et `/refund`, JSON
 1. Créer et faire approuver le modèle chez Meta (gestionnaire WhatsApp), puis le **déclarer** dans l'écran Canaux avec le même nom et la même langue (corps avec `{{1}}`… : le nombre de paramètres est déduit).
 2. Une **autre personne** que l'auteur constate l'approbation (double validation) ; un modèle suspendu par Meta se **retire** d'un clic.
 3. Le partenaire enregistre l'**accord WhatsApp** de l'abonné (`POST /api/v1/chat/optins`, preuve obligatoire) puis envoie (`POST /api/v1/chat/messages` : `to`, `serviceId`, `template`, `lang`, `params`, `clientRef` idempotent).
-4. Refus si : modèle non approuvé, mauvais nombre de paramètres, pas d'accord WhatsApp, STOP ultérieur (tous canaux, y compris STOP reçu sur WhatsApp), liste noire, antifraude.
+4. Refus si : modèle non approuvé, mauvais nombre de paramètres, pas d'accord WhatsApp, STOP ultérieur (tous canaux, y compris STOP reçu sur WhatsApp), liste noire, antifraude. Après un STOP, le partenaire ne peut pas réenregistrer d'accord (409) : seul l'abonné peut le redonner.
 
 ## Serveur SMPP pour clients externes
 Les partenaires et agrégateurs peuvent se connecter **en SMPP v3.4** à la plateforme (en plus de l'API REST) :
@@ -82,7 +82,7 @@ Les partenaires et agrégateurs peuvent se connecter **en SMPP v3.4** à la plat
 - **bind** TX / RX / TRX ; `submit_sm` soumis exactement aux règles de l'API : expéditeur = short code d'un service actif du client, listes noire / blanche, antifraude, quota par minute (`ESME_RTHROTTLED`), facturation au tarif approuvé, puis acheminement vers l'opérateur par Jasmin. Codes d'erreur : `ESME_RINVSRCADR`, `ESME_RINVDSTADR`, `ESME_RSUBMITFAIL`, `ESME_RINVMSGLEN`.
 - Messages longs : **UDH réassemblés** (références 8 et 16 bits, 6 parties maximum, partie manquante abandonnée après 2 minutes) ou `message_payload` ; GSM-7, Latin-1 et UCS-2 (arabe).
 - **Accusés** (`registered_delivery`) en `deliver_sm`, un par partie, **rejoués à la reconnexion** si le client était déconnecté ; **MO** des services du client remis en `deliver_sm` (option).
-- Exploitation : port `SMPP_SERVER_PORT` publié **uniquement** sur l'interface du VPN partenaires (`SMPP_SERVER_BIND`).
+- Exploitation : port `SMPP_SERVER_PORT` publié **uniquement** sur l'interface du VPN partenaires (`SMPP_SERVER_BIND`). Protections : 50 connexions sans bind au plus (5 par adresse), délai de bind 3 s, délai de réponse PDU 5 s ; un client qui ne répond plus est déconnecté après 3 remises en échec (ses accusés restent en base et sont rejoués) ; droits revérifiés à chaque envoi.
 - Non pris en charge (refus explicite) : `submit_multi`, `query_sm`, `replace_sm`, `cancel_sm`, `data_sm`.
 
 ## Applications natives Android / iOS

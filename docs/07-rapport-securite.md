@@ -28,7 +28,19 @@
 ## 3. Données personnelles
 MSISDN stocké en clair (nécessaire au service) ; accès contrôlé par rôle, masquage par défaut dans les écrans, logs et exports financiers ; preuves de consentement historisées ; export d'historique par MSISDN. Les durées de conservation et le texte d'information seront fixés avec le conseil juridique du client (CDC §11.3) : la purge est à planifier via une tâche SQL dédiée une fois la durée arrêtée.
 
-## 4. Limites et points à traiter avant ouverture commerciale
+## 4. Revue de sécurité des options (USSD, IVR, DCB, WhatsApp / RCS, serveur SMPP, BI)
+Revue indépendante du code des options ; vérifiés sans faille exploitable : signatures HMAC des webhooks (comparaison en temps constant, secret vide refusé), SQL dynamique de la BI et de l'ETL (fragments issus de listes fermées, dates en paramètres), double validation des modèles WhatsApp, isolation DCB entre clients, administration SMPP (SUPER_ADMIN, mot de passe aléatoire haché), callbacks USSD / IVR (secret partagé). Constats **corrigés et testés** :
+
+| Gravité | Constat | Correction | Test |
+|---|---|---|---|
+| Moyenne | DCB : confirmations simultanées contournaient la limite de 3 essais de code (et pouvaient débiter / rembourser deux fois) | relecture de la transaction sous verrou de ligne (`PESSIMISTIC_WRITE`) dans `confirm` et `refund` | 20 confirmations simultanées : exactement 2 × 422, 1 × FAILED, 17 × 409 |
+| Moyenne | SMPP : un client qui ne répond pas aux `deliver_sm` bloquait les accusés de tous les clients (verrou global, fils sans limite) | verrou par client, pool de remise borné (file pleine = accusé rejoué à la reconnexion), délai PDU 5 s, déconnexion après 3 échecs | suite SMPP |
+| Moyenne | SMPP : connexions sans bind en masse (épuisement des fils) | 50 connexions en attente au plus (5 par adresse), délai de bind 3 s ; port réservé au VPN partenaires | connexion au-delà du plafond fermée, client légitime accepté ensuite |
+| Faible / moyenne | DCB : faux codes répétés par un partenaire bloquaient le numéro d'un abonné sur tous les canaux | alerte antifraude sans blocage pour ce signal | plus de blocage, nouvelle demande acceptée |
+| Faible | WhatsApp : un partenaire pouvait réenregistrer un accord après le STOP de l'abonné | accord refusé (409) tant que le dernier consentement est un arrêt | test des modèles |
+| Faible | SMPP : retrait du droit `messages:send` sans effet sur une session déjà ouverte | droits revérifiés à chaque `submit_sm` | - |
+
+## 5. Limites et points à traiter avant ouverture commerciale
 - Test d'intrusion externe non réalisé (chiffré au bordereau « Tests de charge & sécurité »).
 - Chiffrement au repos : **les numéros de téléphone sont chiffrés par l'application** (AES-256-CTR à IV synthétique HMAC-SHA256, déterministe pour conserver recherches et unicité ; préfixe `enc:v1:` ; altération détectée) avec la clé `DATA_KEY` (≥ 32 caractères, exigée par `ProductionGuard`). Le déterminisme révèle les égalités entre lignes, pas les numéros. **La clé doit être sauvegardée hors serveur** ; sa perte rend les numéros irrécupérables ; la rotation se fait avec l'outil `Rekey` (`18-points-techniques-traites.md`). Le reste de la base relève toujours du chiffrement disque/TDE de l'hébergeur ; les sauvegardes sont chiffrées par l'application.
 - Journal d'audit immuable au niveau PostgreSQL (trigger V10 : UPDATE/TRUNCATE interdits, DELETE réservé à la purge de conservation) ; webhooks partenaires protégés contre le SSRF (`UrlGuard`) ; mot de passe initial à changer et révocation des sessions (`16-moteurs-facturation-comptes.md`).

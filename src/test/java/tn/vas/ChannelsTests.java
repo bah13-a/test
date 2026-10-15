@@ -346,9 +346,11 @@ class ChannelsTests {
                     .andExpect(status().isUnprocessableEntity());
         mvc.perform(post("/api/v1/dcb/charges/" + tx2 + "/confirm").header("X-API-Key", key).contentType(MediaType.APPLICATION_JSON).content("{\"code\":\"999999\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("FAILED"));
-        assertTrue(fraud.blocked("+216" + from));
+        // alerte, mais PAS de blocage : un partenaire ne doit pas pouvoir bloquer un abonné sur tous les canaux en saisissant de faux codes
+        assertTrue(alerts.findTop200ByStatusOrderByIdDesc("OPEN").stream().anyMatch(a -> FraudService.OTP_ABUSE.equals(a.getRule())));
+        assertFalse(fraud.blocked("+216" + from));
         mvc.perform(post("/api/v1/dcb/charges").header("X-API-Key", key).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"msisdn\":\"" + from + "\",\"serviceId\":" + shop.getId() + "}")).andExpect(status().isForbidden());
+                .content("{\"msisdn\":\"" + from + "\",\"serviceId\":" + shop.getId() + "}")).andExpect(status().isCreated());
     }
 
     // ---------------------------------------------------------------- WhatsApp / RCS
@@ -441,6 +443,36 @@ class ChannelsTests {
                 + "\"messages\":[{\"from\":\"216" + from + "\",\"id\":\"wamid.stop" + sn + "\",\"type\":\"text\",\"text\":{\"body\":\"STOP\"}}]}}]}]}";
         mvc.perform(post("/hooks/whatsapp").header("X-Hub-Signature-256", sign("test-app-secret", stop)).contentType(MediaType.APPLICATION_JSON).content(stop)).andExpect(status().isOk());
         mvc.perform(post("/api/v1/chat/messages").header("X-API-Key", key).contentType(MediaType.APPLICATION_JSON).content(send)).andExpect(status().isForbidden());
+        // le partenaire ne peut pas passer outre le STOP en réenregistrant un accord
+        mvc.perform(post("/api/v1/chat/optins").header("X-API-Key", key).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"msisdn\":\"" + from + "\",\"serviceId\":" + svc.getId() + ",\"proof\":\"nouvel accord\"}")).andExpect(status().isConflict());
+    }
+
+    @Test
+    void concurrentDcbConfirmationsCannotBypassTheAttemptLimit() throws Exception {
+        var p = partner();
+        var shop = service("Boutique3 " + sn, ServiceType.ALERT, p);
+        tariff(shop, EventType.DCB, "1.000");
+        String key = apiKey(p, "dcb:charge"), from = msisdn();
+        String tx = JSON.readTree(mvc.perform(post("/api/v1/dcb/charges").header("X-API-Key", key).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"msisdn\":\"" + from + "\",\"serviceId\":" + shop.getId() + "}")).andReturn().getResponse().getContentAsString()).path("id").asText();
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(10);
+        var codes = new java.util.concurrent.ConcurrentLinkedQueue<Integer>();
+        var futures = new java.util.ArrayList<java.util.concurrent.Future<?>>();
+        for (int i = 0; i < 20; i++) {
+            final int n = i;
+            futures.add(pool.submit(() -> {
+                try {
+                    codes.add(mvc.perform(post("/api/v1/dcb/charges/" + tx + "/confirm").header("X-API-Key", key).contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"code\":\"" + String.format("%06d", 100000 + n) + "\"}")).andReturn().getResponse().getStatus());
+                } catch (Exception e) { codes.add(-1); }
+            }));
+        }
+        for (var f : futures) f.get();
+        pool.shutdown();
+        assertEquals(2, codes.stream().filter(c -> c == 422).count(), "seuls les 2 premiers essais faux renvoient 422 : " + codes);
+        assertEquals(1, codes.stream().filter(c -> c == 200).count(), "le 3e essai faux clôt la transaction (FAILED) : " + codes);
+        assertEquals(17, codes.stream().filter(c -> c == 409).count(), "les suivants trouvent la transaction close : " + codes);
     }
 
     // ---------------------------------------------------------------- BI

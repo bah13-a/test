@@ -94,7 +94,9 @@ public class DcbService {
     }
 
     @Transactional(noRollbackFor = ResponseStatusException.class)   // un code faux doit rester compté
-    public DcbTransaction confirm(DcbTransaction t, String otp) {
+    public DcbTransaction confirm(DcbTransaction detached, String otp) {
+        // relecture verrouillée : sans elle, des confirmations simultanées contourneraient la limite d'essais ou débiteraient deux fois
+        DcbTransaction t = txs.lockByTxId(detached.getTxId()).orElseThrow();
         if (!"OTP_SENT".equals(t.getStatus())) throw new ResponseStatusException(HttpStatus.CONFLICT, "transaction " + t.getStatus());
         var now = clock.instant();
         if (now.isAfter(t.getOtpExpiresAt())) {
@@ -105,7 +107,8 @@ public class DcbService {
         if (otp == null || !MessageDigest.isEqual(t.getOtpHash().getBytes(StandardCharsets.UTF_8), hash(t.getTxId(), otp.strip()).getBytes(StandardCharsets.UTF_8))) {
             if (t.getOtpAttempts() >= props.otpMaxAttempts()) {
                 finish(t, "FAILED", "trop d'essais de code");
-                fraud.report(FraudService.OTP_ABUSE, t.getMsisdn(), t.getService(), "DCB : " + t.getOtpAttempts() + " codes faux (transaction " + t.getTxId() + ")");
+                // alerte sans blocage : un partenaire ne doit pas pouvoir bloquer le numéro d'un abonné sur tous les canaux en saisissant de faux codes
+                fraud.raise(FraudService.OTP_ABUSE, t.getMsisdn(), t.getService(), "DCB : " + t.getOtpAttempts() + " codes faux (transaction " + t.getTxId() + ", client " + t.getApiClient().getName() + ")");
                 return t;
             }
             t.setUpdatedAt(now);
@@ -128,7 +131,8 @@ public class DcbService {
     }
 
     @Transactional
-    public DcbTransaction refund(DcbTransaction t, String actor) {
+    public DcbTransaction refund(DcbTransaction detached, String actor) {
+        DcbTransaction t = txs.lockByTxId(detached.getTxId()).orElseThrow();   // un seul remboursement même en cas d'appels simultanés
         if (!"CHARGED".equals(t.getStatus())) throw new ResponseStatusException(HttpStatus.CONFLICT, "seul un paiement CHARGED est remboursable");
         var r = gateway.refund(t.getOperator(), t.getProviderRef(), t.getAmount(), t.getTxId());
         if (!r.ok()) throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "remboursement refusé par l'opérateur : " + r.error());

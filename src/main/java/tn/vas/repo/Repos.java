@@ -245,6 +245,10 @@ public final class Repos {
 
     public interface DcbRepo extends JpaRepository<DcbTransaction, Long> {
         Optional<DcbTransaction> findByTxId(String txId);
+        /** Verrou de ligne : confirmations / remboursements concurrents d'une même transaction traités l'un après l'autre. */
+        @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+        @Query("select t from DcbTransaction t where t.txId = :id")
+        Optional<DcbTransaction> lockByTxId(@Param("id") String txId);
         Optional<DcbTransaction> findByApiClientIdAndClientRef(Long apiClientId, String clientRef);
         List<DcbTransaction> findTop200ByOrderByIdDesc();
         @Query("select t from DcbTransaction t where t.status = 'OTP_SENT' and t.otpExpiresAt < :now")

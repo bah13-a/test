@@ -55,7 +55,17 @@ public class SmppServer implements SmartLifecycle {
     private final PasswordEncoder encoder;
     private final AuditService audit;
     private final TransactionTemplate tx;
+    /** Connexions en attente de bind (plafonnées) : une connexion sans bind ne mobilise un fil que BIND_TIMEOUT_MS. */
+    public static final int MAX_PENDING = 50, MAX_PENDING_PER_IP = 5, BIND_TIMEOUT_MS = 3_000, PDU_TIMEOUT_MS = 5_000, MAX_DELIVERY_FAILURES = 3;
     private final ExecutorService pool = Executors.newCachedThreadPool(r -> { var t = new Thread(r, "smpp-server"); t.setDaemon(true); return t; });
+    /** Remise des accusés et MO : pool borné ; file pleine = accusé laissé en base, rejoué à la reconnexion (rien n'est perdu). */
+    private final ThreadPoolExecutor delivery = new ThreadPoolExecutor(4, 4, 60, TimeUnit.SECONDS, new ArrayBlockingQueue<>(10_000),
+            r -> { var t = new Thread(r, "smpp-delivery"); t.setDaemon(true); return t; }, new ThreadPoolExecutor.DiscardPolicy());
+    private final java.util.concurrent.atomic.AtomicInteger pending = new java.util.concurrent.atomic.AtomicInteger();
+    private final ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicInteger> pendingByIp = new ConcurrentHashMap<>();
+    /** Un verrou par client : un client lent ne retarde jamais les accusés des autres. */
+    private final ConcurrentHashMap<Long, Object> clientLocks = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Long, java.util.concurrent.atomic.AtomicInteger> deliveryFailures = new ConcurrentHashMap<>();
     private final ScheduledExecutorService janitor = Executors.newSingleThreadScheduledExecutor(r -> { var t = new Thread(r, "smpp-concat"); t.setDaemon(true); return t; });
     /** Connexions ouvertes par client API. */
     private final ConcurrentHashMap<Long, CopyOnWriteArrayList<SMPPServerSession>> bound = new ConcurrentHashMap<>();
@@ -104,7 +114,17 @@ public class SmppServer implements SmartLifecycle {
             while (running) {
                 try {
                     SMPPServerSession s = listener.accept();
-                    pool.submit(() -> bind(s));
+                    String ip = s.getInetAddress() == null ? "?" : s.getInetAddress().getHostAddress();
+                    var perIp = pendingByIp.computeIfAbsent(ip, k -> new java.util.concurrent.atomic.AtomicInteger());
+                    if (pending.incrementAndGet() > MAX_PENDING || perIp.incrementAndGet() > MAX_PENDING_PER_IP) {
+                        pending.decrementAndGet();
+                        perIp.decrementAndGet();
+                        s.close();   // trop de connexions sans bind : refus immédiat (inondation de connexions)
+                        continue;
+                    }
+                    pool.submit(() -> {
+                        try { bind(s); } finally { pending.decrementAndGet(); perIp.decrementAndGet(); }
+                    });
                 } catch (IOException e) {
                     if (running) log.warn("serveur SMPP : accept {}", e.getMessage());
                 }
@@ -120,6 +140,7 @@ public class SmppServer implements SmartLifecycle {
         owner.keySet().forEach(SMPPServerSession::unbindAndClose);
         try { if (listener != null) listener.close(); } catch (IOException ignored) { }
         janitor.shutdownNow();
+        delivery.shutdownNow();
     }
 
     @Override public boolean isRunning() { return running; }
@@ -140,7 +161,7 @@ public class SmppServer implements SmartLifecycle {
     private void bind(SMPPServerSession s) {
         String ip = s.getInetAddress() == null ? "?" : s.getInetAddress().getHostAddress();
         try {
-            BindRequest br = s.waitForBind(10_000);
+            BindRequest br = s.waitForBind(BIND_TIMEOUT_MS);
             if (limiter.peek("smppbind:" + ip) >= props.bindFailuresPerMinute()) { br.reject(SMPPConstant.STAT_ESME_RBINDFAIL); s.close(); return; }
             ApiClient c = clients.findBySmppSystemIdAndActiveTrue(br.getSystemId()).orElse(null);
             int reject = c == null ? SMPPConstant.STAT_ESME_RINVSYSID
@@ -156,6 +177,7 @@ public class SmppServer implements SmartLifecycle {
                 return;
             }
             br.accept("VASTN", InterfaceVersion.IF_34);
+            s.setTransactionTimer(PDU_TIMEOUT_MS);   // un client qui ne répond pas aux deliver_sm n'immobilise pas la remise plus de 5 s
             s.setMessageReceiverListener(new Receiver(c.getId()));
             bound.computeIfAbsent(c.getId(), k -> new CopyOnWriteArrayList<>()).add(s);
             owner.put(s, c.getId());
@@ -167,7 +189,8 @@ public class SmppServer implements SmartLifecycle {
                 }
             });
             audit.log("SMPP_BIND", "smpp:" + c.getSmppSystemId(), ip + " " + br.getBindType());
-            if (br.getBindType() != BindType.BIND_TX) pool.submit(() -> replayDlr(c.getId()));
+            deliveryFailures.remove(c.getId());
+            if (br.getBindType() != BindType.BIND_TX) delivery.execute(() -> replayDlr(c.getId()));
         } catch (Exception e) {
             log.warn("serveur SMPP : bind {} échoué : {}", ip, e.getMessage());
             s.close();
@@ -193,8 +216,8 @@ public class SmppServer implements SmartLifecycle {
 
         @Override
         public SubmitSmResult onAcceptSubmitSm(SubmitSm sm, SMPPServerSession session) throws ProcessRequestException {
-            ApiClient c = clients.findById(clientId).filter(ApiClient::isActive)
-                    .orElseThrow(() -> new ProcessRequestException("client désactivé", SMPPConstant.STAT_ESME_RSUBMITFAIL));
+            ApiClient c = clients.findById(clientId).filter(ApiClient::isActive).filter(x -> scope(x, "messages:send") && x.getSmppSystemId() != null)
+                    .orElseThrow(() -> new ProcessRequestException("client désactivé ou droit retiré", SMPPConstant.STAT_ESME_RSUBMITFAIL));
             if (!limiter.allow("smpp:" + clientId, c.getRateLimitPerMin())) throw new ProcessRequestException("quota", SMPPConstant.STAT_ESME_RTHROTTLED);
             String msisdn = Text.normalizeMsisdn(sm.getDestAddress());
             if (msisdn == null) throw new ProcessRequestException("destination", SMPPConstant.STAT_ESME_RINVDSTADR);
@@ -309,7 +332,7 @@ public class SmppServer implements SmartLifecycle {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onFinal(DomainEvents.MtFinal e) {
-        if (running) pool.submit(() -> mts.findByCorrelationId(e.correlationId()).ifPresent(this::deliverDlr));
+        if (running) delivery.execute(() -> mts.findByCorrelationId(e.correlationId()).ifPresent(this::deliverDlr));
     }
 
     private void replayDlr(Long clientId) {
@@ -317,8 +340,15 @@ public class SmppServer implements SmartLifecycle {
     }
 
     /** Remet l'accusé de chaque partie ; true si remis (ou rien à remettre). */
-    synchronized boolean deliverDlr(MtMessage m) {
+    boolean deliverDlr(MtMessage m) {
         if (!m.isSmppDlr() || m.isSmppDlrSent() || m.getApiClientId() == null) return true;
+        synchronized (clientLocks.computeIfAbsent(m.getApiClientId(), k -> new Object())) {
+            return deliverDlrLocked(m);
+        }
+    }
+
+    private boolean deliverDlrLocked(MtMessage m) {
+        if (mts.findByCorrelationId(m.getCorrelationId()).map(MtMessage::isSmppDlrSent).orElse(true)) return true;   // déjà remis par un autre fil
         SMPPServerSession s = receiver(m.getApiClientId());
         if (s == null) return false;   // client déconnecté : rejoué à sa prochaine connexion
         DeliveryReceiptState st = switch (m.getStatus()) {
@@ -339,9 +369,16 @@ public class SmppServer implements SmartLifecycle {
                         (byte) 0, (byte) 0, new RegisteredDelivery(0), new GeneralDataCoding(Alphabet.ALPHA_DEFAULT), r.toString().getBytes(StandardCharsets.ISO_8859_1));
             }
             tx.executeWithoutResult(t -> mts.findByCorrelationId(m.getCorrelationId()).ifPresent(x -> { x.setSmppDlrSent(true); mts.save(x); }));
+            deliveryFailures.remove(m.getApiClientId());
             return true;
         } catch (Exception ex) {
             log.warn("accusé SMPP non remis ({}) : {}", m.getCorrelationId(), ex.getMessage());
+            // client qui ne répond plus : déconnecté après quelques échecs ; ses accusés restent en base et sont rejoués à sa reconnexion
+            if (deliveryFailures.computeIfAbsent(m.getApiClientId(), k -> new java.util.concurrent.atomic.AtomicInteger()).incrementAndGet() >= MAX_DELIVERY_FAILURES) {
+                log.warn("client SMPP {} déconnecté : remises en échec répétées", m.getApiClientId());
+                disconnect(m.getApiClientId());
+                deliveryFailures.remove(m.getApiClientId());
+            }
             return false;
         }
     }
@@ -349,7 +386,7 @@ public class SmppServer implements SmartLifecycle {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onMo(DomainEvents.MoRouted e) {
         if (!running) return;
-        pool.submit(() -> {
+        delivery.execute(() -> {
             var mo = mos.findById(e.moId()).orElse(null);
             var svc = services.findById(e.serviceId()).orElse(null);
             if (mo == null || svc == null || svc.getPartner() == null) return;

@@ -54,6 +54,10 @@ public class TemplateService {
 
     @Transactional
     public ConsentRecord recordOptIn(String msisdn, VasService svc, String proof) {
+        // après un STOP de l'abonné, seul l'abonné lui-même (nouveau message entrant) peut redonner son accord, jamais le partenaire
+        var last = consents.findTopByMsisdnAndServiceOrderByAtDescIdDesc(msisdn, svc);
+        if (last.isPresent() && "STOPPED".equals(last.get().getAction()))
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT, "l'abonné a demandé l'arrêt : accord à renouveler par l'abonné lui-même");
         var c = new ConsentRecord();
         c.setMsisdn(msisdn);
         c.setService(svc);

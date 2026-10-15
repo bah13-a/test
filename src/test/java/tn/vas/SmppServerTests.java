@@ -206,6 +206,25 @@ class SmppServerTests {
         rx.unbindAndClose();
     }
 
+    @Test
+    void connectionsWithoutBindAreCappedPerAddress() throws Exception {
+        var socks = new java.util.ArrayList<java.net.Socket>();
+        try {
+            for (int i = 0; i < tn.vas.smpp.SmppServer.MAX_PENDING_PER_IP; i++) socks.add(new java.net.Socket("127.0.0.1", PORT));
+            Thread.sleep(300);
+            var extra = new java.net.Socket("127.0.0.1", PORT);
+            extra.setSoTimeout(2000);
+            assertEquals(-1, extra.getInputStream().read(), "connexion au-delà du plafond fermée immédiatement");
+            extra.close();
+        } finally {
+            for (var x : socks) x.close();
+        }
+        Thread.sleep(tn.vas.smpp.SmppServer.BIND_TIMEOUT_MS + 1000);   // les connexions muettes sont libérées au délai de bind
+        var s = bind(systemId, password, BindType.BIND_TRX);   // un vrai client se connecte ensuite normalement
+        assertTrue(s.getSessionState().isBound());
+        s.unbindAndClose();
+    }
+
     static byte[] concat(byte[] a, byte[] b) {
         byte[] r = new byte[a.length + b.length];
         System.arraycopy(a, 0, r, 0, a.length);
