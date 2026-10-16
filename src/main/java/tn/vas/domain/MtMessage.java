@@ -39,6 +39,8 @@ public class MtMessage {
     /** Client SMPP : accusé de livraison demandé / déjà remis. */
     private boolean smppDlr;
     private boolean smppDlrSent;
+    /** registered_delivery & 0x03 : 1 = succès et échec, 2 = échec seulement. */
+    private short smppDlrMode;
     /** Contenu structuré hors SMS (JSON) : modèle WhatsApp {template, lang, params}. */
     private String payload;
 }

@@ -25,10 +25,11 @@ Légende : **Auto** = test automatisé exécuté en CI (`mvn verify`) ; **SIT** 
 | A19 | DCB : code, débit, remboursement, abus | Auto | `dcbOtpChargeRefundAndIsolation`, `dcbInsufficientBalanceAndOtpAbuse`, `concurrentDcbConfirmationsCannotBypassTheAttemptLimit` ; **OP** : API DCB |
 | A20 | WhatsApp / RCS : entrant signé, réponse, statut | Auto | `whatsappInboundRoutesToKeywordAndRepliesOnSameChannel`, `rcsInboundSigned` ; **OP** : compte Meta / fournisseur RCS |
 | A21 | Modèles WhatsApp : approbation, accord, STOP | Auto | `whatsappTemplatesRequireApprovalAndOptInAndStopRevokes` |
-| A22 | Serveur SMPP clients : bind, submit, accusés, MO, refus | Auto | `SmppServerTests` (5 scénarios, vrai client SMPP) ; **PART** : recette avec chaque partenaire |
+| A22 | Serveur SMPP clients : bind, submit, accusés, MO, refus | Auto | `SmppServerTests` (9 scénarios, vrai client SMPP) ; **PART** : recette avec chaque partenaire |
 | A23 | Antifraude : vitesse, plafond, score | Auto | `velocityBlocksNumberButStopStillWorks`, `dailySpendLimitStopsBilledActions`, `riskScoreIsExplainableAndFlagsOutliers` ; calibrage sur historique réel |
 | A24 | Décisionnel et entrepôt | Auto + SIT | `analyticsOverviewAndExport`, `dataWarehouseEtlIsIdempotentAndMatchesTheLedger` ; pile réelle : ETL sur PostgreSQL |
 | A25 | Applications mobiles | CI | PWA : `options.test.jsx` ; Android / iOS : jobs `mobile-android`, `mobile-ios` ; **stores** : publication client |
+| A26 | Conformité SMPP v3.4 (PDU, champs, TLV, codes d'erreur) | Auto + OP / PART | Matrice `22-conformite-smpp-v34.md` ; serveur : `SmppServerTests` ; opérateurs : `SmppSimulatorTests`, pile réelle ; **OP / PART** : contrôle croisé avec l'outil de test de chaque opérateur et partenaire |
 
 | §14.2 | Résultat attendu | Statut |
 |---|---|---|

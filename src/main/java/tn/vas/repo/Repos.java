@@ -69,6 +69,11 @@ public final class Repos {
                 + "(tn.vas.domain.Enums.MtStatus.DELIVERED, tn.vas.domain.Enums.MtStatus.EXPIRED, tn.vas.domain.Enums.MtStatus.UNDELIVERABLE, "
                 + "tn.vas.domain.Enums.MtStatus.REJECTED, tn.vas.domain.Enums.MtStatus.FAILED, tn.vas.domain.Enums.MtStatus.UNKNOWN) order by m.id")
         List<MtMessage> pendingSmppDlr(@Param("c") Long apiClientId);
+        /** MT d'un client SMPP par identifiant de message rendu au client (« smpp:id1,id2… » dans client_ref). */
+        @Query("select m from MtMessage m where m.apiClientId = :c and m.clientRef like concat('smpp:%', :id, '%') order by m.id desc")
+        List<MtMessage> findSmpp(@Param("c") Long apiClientId, @Param("id") String messageId);
+        @Query("select m from MtMessage m where m.apiClientId = :c and m.sender = :src and m.status = tn.vas.domain.Enums.MtStatus.PENDING")
+        List<MtMessage> pendingFrom(@Param("c") Long apiClientId, @Param("src") String sender);
         List<MtMessage> findByStatusAndCreatedAtBefore(Enums.MtStatus s, Instant before);
         List<MtMessage> findTop500ByStatusAndUpdatedAtBefore(Enums.MtStatus s, Instant before);
         @Query("select m.status, count(m) from MtMessage m where m.service = :s group by m.status")

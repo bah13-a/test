@@ -6,6 +6,8 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.*;
+import org.jsmpp.DefaultPDUReader;
+import org.jsmpp.DefaultPDUSender;
 import org.jsmpp.SMPPConstant;
 import org.jsmpp.bean.*;
 import org.jsmpp.extra.ProcessRequestException;
@@ -72,7 +74,7 @@ public class SmppServer implements SmartLifecycle {
     private final ConcurrentHashMap<SMPPServerSession, Long> owner = new ConcurrentHashMap<>();
     /** Parties de messages concaténés en attente : clé client|destination|référence. */
     private final ConcurrentHashMap<String, Concat> concat = new ConcurrentHashMap<>();
-    private volatile SMPPServerSessionListener listener;
+    private volatile org.jsmpp.session.connection.ServerConnection listener;
     private volatile boolean running;
 
     private static final class Concat {
@@ -105,7 +107,7 @@ public class SmppServer implements SmartLifecycle {
     public void start() {
         if (!props.enabled()) return;
         try {
-            listener = new SMPPServerSessionListener(props.port());
+            listener = new org.jsmpp.session.connection.socket.ServerSocketConnectionFactory().listen(props.port());
         } catch (IOException e) {
             throw new IllegalStateException("serveur SMPP : port " + props.port() + " indisponible", e);
         }
@@ -113,7 +115,9 @@ public class SmppServer implements SmartLifecycle {
         pool.submit(() -> {
             while (running) {
                 try {
-                    SMPPServerSession s = listener.accept();
+                    var conn = listener.accept();
+                    conn.setSoTimeout(5000);
+                    SMPPServerSession s = new SMPPServerSession(conn, null, null, null, 3, 100, new StatusSender(), new DefaultPDUReader());
                     String ip = s.getInetAddress() == null ? "?" : s.getInetAddress().getHostAddress();
                     var perIp = pendingByIp.computeIfAbsent(ip, k -> new java.util.concurrent.atomic.AtomicInteger());
                     if (pending.incrementAndGet() > MAX_PENDING || perIp.incrementAndGet() > MAX_PENDING_PER_IP) {
@@ -207,59 +211,217 @@ public class SmppServer implements SmartLifecycle {
         return c.getScopes() != null && Arrays.stream(c.getScopes().split(",")).map(String::strip).anyMatch(s::equals);
     }
 
-    // ------------------------------------------------------------------ submit_sm
+    // ------------------------------------------------------------------ PDU SMPP v3.4 reçus du client (§4.4 à §4.10)
+
+    /** Champs communs à submit_sm, data_sm et submit_multi (une destination). */
+    record Sm(String source, String dest, int esm, int coding, byte[] body, OptionalParameter payload, int registered, int priority,
+              String schedule, String validity, OptionalParameter sarRef, OptionalParameter sarTotal, OptionalParameter sarSeq, boolean replace) {}
 
     private final class Receiver implements ServerMessageReceiverListener {
         private final long clientId;
 
         Receiver(long clientId) { this.clientId = clientId; }
 
+        private ApiClient client() throws ProcessRequestException {
+            return clients.findById(clientId).filter(ApiClient::isActive).filter(x -> scope(x, "messages:send") && x.getSmppSystemId() != null)
+                    .orElseThrow(() -> new ProcessRequestException("client désactivé ou droit retiré", SMPPConstant.STAT_ESME_RSUBMITFAIL));
+        }
+
         @Override
         public SubmitSmResult onAcceptSubmitSm(SubmitSm sm, SMPPServerSession session) throws ProcessRequestException {
-            ApiClient c = clients.findById(clientId).filter(ApiClient::isActive).filter(x -> scope(x, "messages:send") && x.getSmppSystemId() != null)
-                    .orElseThrow(() -> new ProcessRequestException("client désactivé ou droit retiré", SMPPConstant.STAT_ESME_RSUBMITFAIL));
+            var c = client();
+            quota(c);
+            return result(accept(c, new Sm(sm.getSourceAddr(), sm.getDestAddress(), sm.getEsmClass() & 0xff, sm.getDataCoding() & 0xff, sm.getShortMessage(),
+                    sm.getOptionalParameter(OptionalParameter.Tag.MESSAGE_PAYLOAD), sm.getRegisteredDelivery() & 0xff, sm.getPriorityFlag() & 0xff,
+                    sm.getScheduleDeliveryTime(), sm.getValidityPeriod(), sm.getOptionalParameter(OptionalParameter.Tag.SAR_MSG_REF_NUM),
+                    sm.getOptionalParameter(OptionalParameter.Tag.SAR_TOTAL_SEGMENTS), sm.getOptionalParameter(OptionalParameter.Tag.SAR_SEGMENT_SEQNUM),
+                    sm.getReplaceIfPresent() == 1), null));
+        }
+
+        /** data_sm (§4.7) : même traitement, texte dans message_payload, pas de date d'échéance (validité par défaut). */
+        @Override
+        public DataSmResult onAcceptDataSm(DataSm d, Session s) throws ProcessRequestException {
+            var c = client();
+            quota(c);
+            String id = accept(c, new Sm(d.getSourceAddr(), d.getDestAddress(), d.getEsmClass() & 0xff, d.getDataCoding() & 0xff, null,
+                    d.getOptionalParameter(OptionalParameter.Tag.MESSAGE_PAYLOAD), d.getRegisteredDelivery() & 0xff, 0, null, null,
+                    d.getOptionalParameter(OptionalParameter.Tag.SAR_MSG_REF_NUM), d.getOptionalParameter(OptionalParameter.Tag.SAR_TOTAL_SEGMENTS),
+                    d.getOptionalParameter(OptionalParameter.Tag.SAR_SEGMENT_SEQNUM), false), null);
+            try {
+                return new DataSmResult(new MessageId(id), new OptionalParameter[0]);
+            } catch (org.jsmpp.PDUStringException e) {
+                throw new ProcessRequestException("identifiant", SMPPConstant.STAT_ESME_RSYSERR);
+            }
+        }
+
+        /** submit_multi (§4.5) : jusqu'à 255 destinations, un identifiant commun, destinations refusées listées avec leur code. */
+        @Override
+        public SubmitMultiResult onAcceptSubmitMulti(SubmitMulti m, SMPPServerSession s) throws ProcessRequestException {
+            var c = client();
+            var dests = m.getDestAddresses() == null ? new DestinationAddress[0] : m.getDestAddresses();
+            if (dests.length == 0 || dests.length > 255) throw new ProcessRequestException("nombre de destinations", SMPPConstant.STAT_ESME_RINVNUMDESTS);
+            String id = id();
+            var refused = new ArrayList<UnsuccessDelivery>();
+            int accepted = 0;
+            for (DestinationAddress d : dests) {
+                if (!(d instanceof Address a)) {   // liste de distribution (dl_name) : non prise en charge
+                    refused.add(new UnsuccessDelivery((byte) 0, (byte) 0, "", SMPPConstant.STAT_ESME_RINVDLNAME));
+                    continue;
+                }
+                try {
+                    quota(c);
+                    accept(c, new Sm(m.getSourceAddr(), a.getAddress(), m.getEsmClass() & 0xff, m.getDataCoding() & 0xff, m.getShortMessage(),
+                            m.getOptionalParameter(OptionalParameter.Tag.MESSAGE_PAYLOAD), m.getRegisteredDelivery() & 0xff, m.getPriorityFlag() & 0xff,
+                            m.getScheduleDeliveryTime(), m.getValidityPeriod(), null, null, null, false), id);
+                    accepted++;
+                } catch (ProcessRequestException e) {
+                    refused.add(new UnsuccessDelivery(a, e.getErrorCode()));
+                }
+            }
+            if (accepted == 0 && !refused.isEmpty()) throw new ProcessRequestException("aucune destination acceptée", refused.get(0).getErrorStatusCode());
+            return new SubmitMultiResult(id, refused.toArray(new UnsuccessDelivery[0]), new OptionalParameter[0]);
+        }
+
+        /** query_sm (§4.8) : état du message, date finale, code d'erreur. L'expéditeur doit être celui du message d'origine. */
+        @Override
+        public QuerySmResult onAcceptQuerySm(QuerySm q, SMPPServerSession s) throws ProcessRequestException {
+            STATUS.remove();
+            client();
+            MtMessage m = mts.findSmpp(clientId, q.getMessageId()).stream().filter(x -> owns(x, q.getMessageId())).findFirst()
+                    .filter(x -> q.getSourceAddr() == null || q.getSourceAddr().isBlank() || q.getSourceAddr().equals(x.getSender()))
+                    .orElseThrow(() -> refuse("message inconnu", SMPPConstant.STAT_ESME_RQUERYFAIL));
+            MessageState st = state(m);
+            boolean fin = st != MessageState.ENROUTE && st != MessageState.SCHEDULED && st != MessageState.ACCEPTED;
+            return new QuerySmResult(fin ? SmppTime.format(m.getUpdatedAt()) : null, st, (byte) 0);
+        }
+
+        /** cancel_sm (§4.9) : par message_id, ou tous les messages en attente d'un expéditeur vers une destination. */
+        @Override
+        public void onAcceptCancelSm(CancelSm cs, SMPPServerSession s) throws ProcessRequestException {
+            STATUS.remove();
+            client();
+            List<MtMessage> targets;
+            if (cs.getMessageId() != null && !cs.getMessageId().isBlank()) {
+                targets = mts.findSmpp(clientId, cs.getMessageId()).stream().filter(x -> owns(x, cs.getMessageId())).toList();
+            } else {
+                String dest = Text.normalizeMsisdn(cs.getDestinationAddress());
+                targets = mts.pendingFrom(clientId, cs.getSourceAddr()).stream().filter(x -> dest == null || dest.equals(x.getMsisdn())).toList();
+            }
+            if (targets.isEmpty()) throw refuse("message inconnu", SMPPConstant.STAT_ESME_RCANCELFAIL);
+            boolean any = false;
+            for (MtMessage m : targets) any |= mtService.cancelPending(m.getCorrelationId());
+            if (!any) throw refuse("message déjà transmis", SMPPConstant.STAT_ESME_RCANCELFAIL);
+        }
+
+        /** replace_sm (§4.10) : texte, échéance et validité d'un message encore en attente. */
+        @Override
+        public void onAcceptReplaceSm(ReplaceSm r, SMPPServerSession s) throws ProcessRequestException {
+            STATUS.remove();
+            client();
+            MtMessage m = mts.findSmpp(clientId, r.getMessageId()).stream().filter(x -> owns(x, r.getMessageId())).findFirst()
+                    .filter(x -> r.getSourceAddr() == null || r.getSourceAddr().isBlank() || r.getSourceAddr().equals(x.getSender()))
+                    .orElseThrow(() -> refuse("message inconnu", SMPPConstant.STAT_ESME_RREPLACEFAIL));
+            var now = java.time.Instant.now();
+            java.time.Instant sched, valid;
+            try {
+                sched = SmppTime.parse(r.getScheduleDeliveryTime(), now);
+                valid = SmppTime.parse(r.getValidityPeriod(), now);
+            } catch (IllegalArgumentException e) {
+                throw refuse(e.getMessage(), SMPPConstant.STAT_ESME_RINVSCHED);
+            }
+            String text = r.getShortMessage() == null || r.getShortMessage().length == 0 ? null : decode(r.getShortMessage(), "UCS2".equals(m.getEncoding()) ? 8 : 0);   // replace_sm ne porte pas de data_coding : celui du message d'origine
+            if (!mtService.replacePending(m.getCorrelationId(), text, sched, valid)) throw refuse("message déjà transmis", SMPPConstant.STAT_ESME_RREPLACEFAIL);
+        }
+
+        @Override public BroadcastSmResult onAcceptBroadcastSm(BroadcastSm b, SMPPServerSession s) throws ProcessRequestException { throw new ProcessRequestException("broadcast_sm (SMPP 5.0) non pris en charge", SMPPConstant.STAT_ESME_RINVCMDID); }
+        @Override public void onAcceptCancelBroadcastSm(CancelBroadcastSm c, SMPPServerSession s) throws ProcessRequestException { throw new ProcessRequestException("SMPP 5.0 non pris en charge", SMPPConstant.STAT_ESME_RINVCMDID); }
+        @Override public QueryBroadcastSmResult onAcceptQueryBroadcastSm(QueryBroadcastSm q, SMPPServerSession s) throws ProcessRequestException { throw new ProcessRequestException("SMPP 5.0 non pris en charge", SMPPConstant.STAT_ESME_RINVCMDID); }
+
+        private void quota(ApiClient c) throws ProcessRequestException {
             if (!limiter.allow("smpp:" + clientId, c.getRateLimitPerMin())) throw new ProcessRequestException("quota", SMPPConstant.STAT_ESME_RTHROTTLED);
-            String msisdn = Text.normalizeMsisdn(sm.getDestAddress());
+        }
+
+        /** Contrôles et envoi d'une destination ; renvoie l'identifiant rendu au client (commun si sharedId, ex. submit_multi). */
+        private String accept(ApiClient c, Sm sm, String sharedId) throws ProcessRequestException {
+            String msisdn = Text.normalizeMsisdn(sm.dest());
             if (msisdn == null) throw new ProcessRequestException("destination", SMPPConstant.STAT_ESME_RINVDSTADR);
-            VasService svc = serviceFor(c, sm.getSourceAddr());
+            VasService svc = serviceFor(c, sm.source());
             if (svc == null) throw new ProcessRequestException("expéditeur", SMPPConstant.STAT_ESME_RINVSRCADR);
             if (rules.blacklisted(msisdn, svc) || (rules.whitelistSize(svc) > 0 && !rules.whitelisted(msisdn, svc)) || fraud.blocked(msisdn))
                 throw new ProcessRequestException("destinataire exclu", SMPPConstant.STAT_ESME_RSUBMITFAIL);
-            int coding = sm.getDataCoding() & 0xff;
-            byte[] body = sm.getShortMessage() == null ? new byte[0] : sm.getShortMessage();
-            OptionalParameter payload = sm.getOptionalParameter(OptionalParameter.Tag.MESSAGE_PAYLOAD);
-            if (body.length == 0 && payload instanceof OptionalParameter.OctetString os) body = os.getValue();
-            boolean wantDlr = (sm.getRegisteredDelivery() & 0x03) != 0;
-            String partId = id();
-            if ((sm.getEsmClass() & 0x40) != 0 && body.length > 0) {
+            var now = java.time.Instant.now();
+            java.time.Instant sched, valid;
+            try { sched = SmppTime.parse(sm.schedule(), now); } catch (IllegalArgumentException e) { throw new ProcessRequestException(e.getMessage(), SMPPConstant.STAT_ESME_RINVSCHED); }
+            try { valid = SmppTime.parse(sm.validity(), now); } catch (IllegalArgumentException e) { throw new ProcessRequestException(e.getMessage(), SMPPConstant.STAT_ESME_RINVEXPIRY); }
+            if (sched != null && sched.isAfter(now.plus(Duration.ofDays(30)))) throw new ProcessRequestException("échéance > 30 jours", SMPPConstant.STAT_ESME_RINVSCHED);
+            java.time.Instant start = sched != null && sched.isAfter(now) ? sched : now;
+            if (valid != null && !valid.isAfter(start)) throw new ProcessRequestException("validité dépassée", SMPPConstant.STAT_ESME_RINVEXPIRY);
+            Duration validity = valid == null ? Duration.ofHours(24) : Duration.between(start, valid).compareTo(Duration.ofDays(7)) > 0 ? Duration.ofDays(7) : Duration.between(start, valid);
+            Priority prio = sm.priority() >= 2 ? Priority.TRANSACTIONAL : sm.priority() == 1 ? Priority.CONFIRMATION : Priority.BULK;
+            int mode = sm.registered() & 0x03;
+            byte[] body = sm.body() == null ? new byte[0] : sm.body();
+            if (body.length == 0 && sm.payload() instanceof OptionalParameter.OctetString os) body = os.getValue();
+            String partId = sharedId != null ? sharedId : id();
+            int[] ref = null;
+            String text;
+            if ((sm.esm() & 0x40) != 0 && body.length > 0) {   // UDH (UDHI)
                 int udhl = body[0] & 0xff;
-                int[] ref = concatInfo(body, udhl);
-                String text = decode(Arrays.copyOfRange(body, udhl + 1, body.length), coding);
-                if (ref == null) return submit(c, svc, msisdn, sm.getSourceAddr(), text, wantDlr, List.of(partId));
-                int total = ref[1], seq = ref[2];
-                if (total < 1 || total > props.maxParts() || seq < 1 || seq > total) throw new ProcessRequestException("parties", SMPPConstant.STAT_ESME_RINVMSGLEN);
-                String key = clientId + "|" + msisdn + "|" + ref[0] + "|" + total;
-                Concat cc = concat.computeIfAbsent(key, k -> new Concat(total));
-                synchronized (cc) {
-                    cc.parts[seq - 1] = text;
-                    cc.ids[seq - 1] = partId;
-                    if (!cc.complete()) return result(partId);
-                    concat.remove(key);
-                    submit(c, svc, msisdn, sm.getSourceAddr(), String.join("", cc.parts), wantDlr, List.of(cc.ids));
-                    return result(partId);
-                }
+                ref = concatInfo(body, udhl);
+                text = decode(Arrays.copyOfRange(body, Math.min(body.length, udhl + 1), body.length), sm.coding());
+            } else {
+                text = decode(body, sm.coding());
+                if (sm.sarRef() != null && sm.sarTotal() != null && sm.sarSeq() != null)   // TLV SAR (§5.3.2.22-24)
+                    ref = new int[]{num(sm.sarRef()), num(sm.sarTotal()), num(sm.sarSeq())};
             }
-            return submit(c, svc, msisdn, sm.getSourceAddr(), decode(body, coding), wantDlr, List.of(partId));
+            if (ref == null && sm.replace()) {   // replace_if_present_flag (§5.2.18) : remplace le dernier message en attente même source / destination
+                var prev = mts.pendingFrom(clientId, sm.source()).stream().filter(x -> msisdn.equals(x.getMsisdn()))
+                        .max(Comparator.comparing(MtMessage::getId)).orElse(null);
+                if (prev != null && prev.getClientRef() != null
+                        && mtService.replacePending(prev.getCorrelationId(), text, sched, start.plus(validity)))
+                    return prev.getClientRef().replaceFirst("^smpp:", "").split(",")[0];
+            }
+            if (ref == null) {
+                submit(c, svc, msisdn, sm.source(), text, mode, List.of(partId), prio, sched, validity);
+                return partId;
+            }
+            int total = ref[1], seq = ref[2];
+            if (total < 1 || total > props.maxParts() || seq < 1 || seq > total) throw new ProcessRequestException("parties", SMPPConstant.STAT_ESME_RINVMSGLEN);
+            String key = clientId + "|" + msisdn + "|" + ref[0] + "|" + total;
+            Concat cc = concat.computeIfAbsent(key, k -> new Concat(total));
+            synchronized (cc) {
+                cc.parts[seq - 1] = text;
+                cc.ids[seq - 1] = partId;
+                if (!cc.complete()) return partId;
+                concat.remove(key);
+                submit(c, svc, msisdn, sm.source(), String.join("", cc.parts), mode, List.of(cc.ids), prio, sched, validity);
+                return partId;
+            }
         }
+    }
 
-        @Override public SubmitMultiResult onAcceptSubmitMulti(SubmitMulti m, SMPPServerSession s) throws ProcessRequestException { throw new ProcessRequestException("submit_multi non pris en charge", SMPPConstant.STAT_ESME_RINVCMDID); }
-        @Override public QuerySmResult onAcceptQuerySm(QuerySm q, SMPPServerSession s) throws ProcessRequestException { throw new ProcessRequestException("query_sm non pris en charge", SMPPConstant.STAT_ESME_RINVCMDID); }
-        @Override public void onAcceptReplaceSm(ReplaceSm r, SMPPServerSession s) throws ProcessRequestException { throw new ProcessRequestException("replace_sm non pris en charge", SMPPConstant.STAT_ESME_RINVCMDID); }
-        @Override public void onAcceptCancelSm(CancelSm c, SMPPServerSession s) throws ProcessRequestException { throw new ProcessRequestException("cancel_sm non pris en charge", SMPPConstant.STAT_ESME_RINVCMDID); }
-        @Override public BroadcastSmResult onAcceptBroadcastSm(BroadcastSm b, SMPPServerSession s) throws ProcessRequestException { throw new ProcessRequestException("non pris en charge", SMPPConstant.STAT_ESME_RINVCMDID); }
-        @Override public void onAcceptCancelBroadcastSm(CancelBroadcastSm c, SMPPServerSession s) throws ProcessRequestException { throw new ProcessRequestException("non pris en charge", SMPPConstant.STAT_ESME_RINVCMDID); }
-        @Override public QueryBroadcastSmResult onAcceptQueryBroadcastSm(QueryBroadcastSm q, SMPPServerSession s) throws ProcessRequestException { throw new ProcessRequestException("non pris en charge", SMPPConstant.STAT_ESME_RINVCMDID); }
-        @Override public DataSmResult onAcceptDataSm(DataSm d, Session s) throws ProcessRequestException { throw new ProcessRequestException("data_sm non pris en charge", SMPPConstant.STAT_ESME_RINVCMDID); }
+    private static int num(OptionalParameter p) {
+        if (p instanceof OptionalParameter.Short sh) return sh.getValue() & 0xffff;
+        if (p instanceof OptionalParameter.Byte by) return by.getValue() & 0xff;
+        byte[] b = p.serialize();
+        return b.length >= 5 ? (b[4] & 0xff) : 0;
+    }
+
+    /** L'identifiant demandé fait bien partie de ceux rendus pour ce message (évite les correspondances partielles du LIKE). */
+    private static boolean owns(MtMessage m, String id) {
+        return id != null && m.getClientRef() != null && Arrays.asList(m.getClientRef().replaceFirst("^smpp:", "").split(",")).contains(id);
+    }
+
+    /** message_state SMPP v3.4 (§5.2.28) d'un MT. */
+    static MessageState state(MtMessage m) {
+        return switch (m.getStatus()) {
+            case PENDING -> m.getScheduledAt() != null && m.getScheduledAt().isAfter(java.time.Instant.now()) ? MessageState.SCHEDULED : MessageState.ENROUTE;
+            case SUBMITTED -> MessageState.ENROUTE;
+            case DELIVERED -> MessageState.DELIVERED;
+            case EXPIRED -> MessageState.EXPIRED;
+            case REJECTED -> "CANCELLED".equals(m.getRawStatus()) ? MessageState.DELETED : MessageState.REJECTED;
+            case UNKNOWN -> MessageState.UNKNOWN;
+            default -> MessageState.UNDELIVERABLE;
+        };
     }
 
     /** Service actif du partenaire du client dont le short code est l'expéditeur (client sans partenaire : tout service actif). */
@@ -269,20 +431,21 @@ public class SmppServer implements SmartLifecycle {
         return list.stream().filter(s -> s.getStatus() == ServiceStatus.ACTIVE && source.strip().equals(s.getShortCode().getNumber())).findFirst().orElse(null);
     }
 
-    private SubmitSmResult submit(ApiClient c, VasService svc, String msisdn, String sender, String text, boolean wantDlr, List<String> partIds) throws ProcessRequestException {
+    private void submit(ApiClient c, VasService svc, String msisdn, String sender, String text, int dlrMode, List<String> partIds, Priority prio,
+                        java.time.Instant schedule, Duration validity) throws ProcessRequestException {
         if (text.isEmpty()) throw new ProcessRequestException("message vide", SMPPConstant.STAT_ESME_RINVMSGLEN);
         try {
             tx.executeWithoutResult(st -> {
-                var m = mtService.submit(new MtService.Request(svc.getShortCode().getOperator(), svc, msisdn, sender, text, Priority.TRANSACTIONAL,
-                        "smpp:" + String.join(",", partIds), EventType.MT, null, c.getId(), Duration.ofHours(24)));
-                m.setSmppDlr(wantDlr);   // même transaction : l'accusé ne peut pas arriver avant ce marquage (publication après commit)
+                var m = mtService.submit(new MtService.Request(svc.getShortCode().getOperator(), svc, msisdn, sender, text, prio,
+                        "smpp:" + String.join(",", partIds), EventType.MT, null, c.getId(), validity, null, schedule));
+                m.setSmppDlr(dlrMode != 0);   // même transaction : l'accusé ne peut pas arriver avant ce marquage (publication après commit)
+                m.setSmppDlrMode((short) dlrMode);
                 mts.save(m);
             });
         } catch (Exception e) {
             log.warn("submit_sm SMPP refusé ({}) : {}", c.getSmppSystemId(), e.getMessage());
             throw new ProcessRequestException("refusé", SMPPConstant.STAT_ESME_RSUBMITFAIL);
         }
-        return result(partIds.get(partIds.size() - 1));
     }
 
     private static SubmitSmResult result(String id) throws ProcessRequestException {
@@ -305,10 +468,36 @@ public class SmppServer implements SmartLifecycle {
         return null;
     }
 
+    /**
+     * jsmpp 3.0.0 répond toujours ESME_RSYSERR (0x08) à un query_sm / cancel_sm / replace_sm refusé, quel que soit le code levé
+     * par l'écouteur. Le code exact (§5.1.3 : 0x67, 0x11, 0x13, 0x61…) est mémorisé sur le fil de traitement du PDU
+     * (le même que celui qui écrit la réponse) et rétabli ici, au moment de l'écriture de l'en-tête de réponse.
+     */
+    private static final ThreadLocal<Integer> STATUS = new ThreadLocal<>();
+
+    private static ProcessRequestException refuse(String msg, int code) {
+        STATUS.set(code);
+        return new ProcessRequestException(msg, code);
+    }
+
+    static final class StatusSender extends DefaultPDUSender {
+        @Override
+        public byte[] sendHeader(java.io.OutputStream os, int commandId, int status, int seq) throws IOException {
+            Integer real = STATUS.get();
+            int cmd = commandId & ~SMPPConstant.MASK_CID_RESP;
+            if (real != null && (cmd == SMPPConstant.CID_QUERY_SM || cmd == SMPPConstant.CID_CANCEL_SM || cmd == SMPPConstant.CID_REPLACE_SM)) {
+                STATUS.remove();
+                if (status == SMPPConstant.STAT_ESME_RSYSERR) status = real;
+            }
+            return super.sendHeader(os, commandId, status, seq);
+        }
+    }
+
     static String decode(byte[] b, int coding) {
         return switch (coding) {
             case 8 -> new String(b, StandardCharsets.UTF_16BE);
             case 3 -> new String(b, StandardCharsets.ISO_8859_1);
+            case 1 -> new String(b, StandardCharsets.US_ASCII);
             default -> MoDecoder.decode(HexFormat.of().formatHex(b), coding, new String(b, StandardCharsets.ISO_8859_1));
         };
     }
@@ -349,6 +538,10 @@ public class SmppServer implements SmartLifecycle {
 
     private boolean deliverDlrLocked(MtMessage m) {
         if (mts.findByCorrelationId(m.getCorrelationId()).map(MtMessage::isSmppDlrSent).orElse(true)) return true;   // déjà remis par un autre fil
+        if (m.getSmppDlrMode() == 2 && m.getStatus() == MtStatus.DELIVERED) {   // accusé demandé sur échec seulement
+            tx.executeWithoutResult(t -> mts.findByCorrelationId(m.getCorrelationId()).ifPresent(x -> { x.setSmppDlrSent(true); mts.save(x); }));
+            return true;
+        }
         SMPPServerSession s = receiver(m.getApiClientId());
         if (s == null) return false;   // client déconnecté : rejoué à sa prochaine connexion
         DeliveryReceiptState st = switch (m.getStatus()) {
@@ -366,7 +559,10 @@ public class SmppServer implements SmartLifecycle {
                         st == DeliveryReceiptState.DELIVRD ? "000" : "001", "");
                 s.deliverShortMessage("", TypeOfNumber.INTERNATIONAL, NumberingPlanIndicator.ISDN, m.getMsisdn().replace("+", ""), TypeOfNumber.UNKNOWN,
                         NumberingPlanIndicator.UNKNOWN, m.getSender(), new ESMClass(MessageMode.DEFAULT, MessageType.SMSC_DEL_RECEIPT, GSMSpecificFeature.DEFAULT),
-                        (byte) 0, (byte) 0, new RegisteredDelivery(0), new GeneralDataCoding(Alphabet.ALPHA_DEFAULT), r.toString().getBytes(StandardCharsets.ISO_8859_1));
+                        (byte) 0, (byte) 0, new RegisteredDelivery(0), new GeneralDataCoding(Alphabet.ALPHA_DEFAULT), r.toString().getBytes(StandardCharsets.ISO_8859_1),
+                        // TLV d'accusé SMPP v3.4 (§5.3.2.12, §5.3.2.35) : identifiant et état du message d'origine
+                        new OptionalParameter.COctetString(OptionalParameter.Tag.RECEIPTED_MESSAGE_ID.code(), id),
+                        new OptionalParameter.Byte(OptionalParameter.Tag.MESSAGE_STATE, state(m).value()));
             }
             tx.executeWithoutResult(t -> mts.findByCorrelationId(m.getCorrelationId()).ifPresent(x -> { x.setSmppDlrSent(true); mts.save(x); }));
             deliveryFailures.remove(m.getApiClientId());

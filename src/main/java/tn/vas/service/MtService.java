@@ -80,6 +80,40 @@ public class MtService {
         return m;
     }
 
+    /** Annulation d'un MT pas encore envoyé (cancel_sm SMPP) : REJECTED / CANCELLED, facturation annulée. false si déjà parti. */
+    @Transactional
+    public boolean cancelPending(String correlationId) {
+        var m = mts.findByCorrelationId(correlationId).orElse(null);
+        if (m == null || m.getStatus() != MtStatus.PENDING) return false;
+        m.setStatus(MtStatus.REJECTED);
+        m.setRawStatus("CANCELLED");
+        m.setUpdatedAt(clock.instant());
+        mts.save(m);
+        record(m, MtStatus.REJECTED, "CANCELLED");
+        if (m.isBillable()) ledger.transition("MT-" + correlationId, BillingStatus.REJECTED);
+        return true;
+    }
+
+    /** Remplacement du texte (et éventuellement de l'échéance / validité) d'un MT pas encore envoyé (replace_sm SMPP). */
+    @Transactional
+    public boolean replacePending(String correlationId, String content, Instant scheduledAt, Instant validityUntil) {
+        var m = mts.findByCorrelationId(correlationId).orElse(null);
+        if (m == null || m.getStatus() != MtStatus.PENDING) return false;
+        if (content != null && !content.isEmpty()) {
+            var size = Text.size(content);
+            m.setContent(content);
+            m.setEncoding(size.encoding().name());
+            m.setSegments(size.segments());
+        }
+        var now = clock.instant();
+        if (scheduledAt != null) m.setScheduledAt(scheduledAt.isAfter(now) ? scheduledAt : null);
+        if (validityUntil != null) m.setValidityUntil(validityUntil);
+        m.setUpdatedAt(now);
+        mts.save(m);
+        if (scheduledAt != null && !scheduledAt.isAfter(now)) queue.publish(m.getCorrelationId(), m.getPriority());
+        return true;
+    }
+
     void record(MtMessage m, MtStatus s, String raw) {
         MtStatus previous = m.getId() == null ? null : history.findTopByMtIdOrderByIdDesc(m.getId()).map(MtStatusHistory::getStatus).orElse(null);
         var h = new MtStatusHistory();

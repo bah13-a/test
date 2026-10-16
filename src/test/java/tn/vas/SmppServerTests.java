@@ -106,7 +106,11 @@ class SmppServerTests {
             @Override public void onAcceptDeliverSm(DeliverSm d) {
                 byte[] b = d.getShortMessage();
                 String body = (d.getDataCoding() & 0xff) == 8 ? new String(b, StandardCharsets.UTF_16BE) : new String(b, StandardCharsets.ISO_8859_1);
-                if (MessageType.SMSC_DEL_RECEIPT.containedIn(d.getEsmClass())) dlrs.add(body); else mos.add(d.getSourceAddr() + "|" + body);
+                if (MessageType.SMSC_DEL_RECEIPT.containedIn(d.getEsmClass())) {
+                    var rid = d.getOptionalParameter(OptionalParameter.Tag.RECEIPTED_MESSAGE_ID);
+                    var st = d.getOptionalParameter(OptionalParameter.Tag.MESSAGE_STATE);
+                    dlrs.add(body + (rid == null ? "" : " |tlv:" + ((OptionalParameter.COctetString) rid).getValueAsString() + "/" + ((OptionalParameter.Byte) st).getValue()));
+                } else mos.add(d.getSourceAddr() + "|" + body);
             }
             @Override public void onAcceptAlertNotification(AlertNotification a) { }
             @Override public DataSmResult onAcceptDataSm(DataSm d, Session x) { return null; }
@@ -223,6 +227,117 @@ class SmppServerTests {
         var s = bind(systemId, password, BindType.BIND_TRX);   // un vrai client se connecte ensuite normalement
         assertTrue(s.getSessionState().isBound());
         s.unbindAndClose();
+    }
+
+    String submitAt(SMPPSession s, String to, String text, String schedule, String validity, int registered) throws Exception {
+        return s.submitShortMessage("", TypeOfNumber.UNKNOWN, NumberingPlanIndicator.UNKNOWN, sn, TypeOfNumber.INTERNATIONAL, NumberingPlanIndicator.ISDN, to,
+                new ESMClass(), (byte) 0, (byte) 1, schedule, validity, new RegisteredDelivery((byte) registered), (byte) 0,
+                new GeneralDataCoding(Alphabet.ALPHA_DEFAULT), (byte) 0, text.getBytes(StandardCharsets.ISO_8859_1)).getMessageId();
+    }
+
+    @Test
+    void scheduledMessageCanBeQueriedReplacedAndCancelled() throws Exception {
+        var s = bind(systemId, password, BindType.BIND_TRX);
+        String to = msisdn();
+        String id = submitAt(s, to, "Rappel demain", "000000010000000R", null, 1);   // échéance relative : +1 h (§7.1.1.2)
+        var m = lastMt(to);
+        assertNotNull(m.getScheduledAt());
+        assertEquals(MessageState.SCHEDULED, s.queryShortMessage(id, TypeOfNumber.UNKNOWN, NumberingPlanIndicator.UNKNOWN, sn).getMessageState());
+        s.replaceShortMessage(id, TypeOfNumber.UNKNOWN, NumberingPlanIndicator.UNKNOWN, sn, null, null, new RegisteredDelivery(1), (byte) 0,
+                "Rappel avance".getBytes(StandardCharsets.ISO_8859_1));
+        assertEquals("Rappel avance", lastMt(to).getContent());
+        // replace_if_present_flag = 1 (§5.2.18) : même source et destination -> le message en attente est remplacé, pas doublé
+        String same = s.submitShortMessage("", TypeOfNumber.UNKNOWN, NumberingPlanIndicator.UNKNOWN, sn, TypeOfNumber.INTERNATIONAL, NumberingPlanIndicator.ISDN, to,
+                new ESMClass(), (byte) 0, (byte) 1, "000000010000000R", null, new RegisteredDelivery((byte) 1), (byte) 1,
+                new GeneralDataCoding(Alphabet.ALPHA_DEFAULT), (byte) 0, "Rappel final".getBytes(StandardCharsets.ISO_8859_1)).getMessageId();
+        assertEquals(id, same);
+        assertEquals(1, mts.findTop100ByMsisdnOrderByCreatedAtDesc("+216" + to).size());
+        assertEquals("Rappel final", lastMt(to).getContent());
+        s.cancelShortMessage("", id, TypeOfNumber.UNKNOWN, NumberingPlanIndicator.UNKNOWN, sn, TypeOfNumber.INTERNATIONAL, NumberingPlanIndicator.ISDN, to);
+        var q = s.queryShortMessage(id, TypeOfNumber.UNKNOWN, NumberingPlanIndicator.UNKNOWN, sn);
+        assertEquals(MessageState.DELETED, q.getMessageState());
+        assertNotNull(q.getFinalDate());
+        assertEquals(BillingStatus.REJECTED, ledger.findByEventId("MT-" + m.getCorrelationId()).orElseThrow().getBillingStatus());   // jamais facturé
+        var e = assertThrows(NegativeResponseException.class, () -> s.cancelShortMessage("", id, TypeOfNumber.UNKNOWN, NumberingPlanIndicator.UNKNOWN, sn,
+                TypeOfNumber.INTERNATIONAL, NumberingPlanIndicator.ISDN, to));
+        assertEquals(0x11, e.getCommandStatus());   // ESME_RCANCELFAIL : déjà annulé
+        var er = assertThrows(NegativeResponseException.class, () -> s.replaceShortMessage(id, TypeOfNumber.UNKNOWN, NumberingPlanIndicator.UNKNOWN, sn,
+                null, null, new RegisteredDelivery(1), (byte) 0, "Trop tard".getBytes(StandardCharsets.ISO_8859_1)));
+        assertEquals(0x13, er.getCommandStatus());  // ESME_RREPLACEFAIL : plus en attente
+        var e2 = assertThrows(NegativeResponseException.class, () -> s.queryShortMessage("inconnu", TypeOfNumber.UNKNOWN, NumberingPlanIndicator.UNKNOWN, sn));
+        assertEquals(0x67, e2.getCommandStatus());  // ESME_RQUERYFAIL
+        var e3 = assertThrows(NegativeResponseException.class, () -> submitAt(s, msisdn(), "x", null, "991399999999000+", 1));   // 16 caractères mais mois 13
+        assertEquals(0x62, e3.getCommandStatus());  // ESME_RINVEXPIRY
+        s.unbindAndClose();
+    }
+
+    @Test
+    void deliveredMessageQueryAndReceiptTlvs() throws Exception {
+        var s = bind(systemId, password, BindType.BIND_TRX);
+        String to = msisdn();
+        String id = submitAt(s, to, "Bonjour", null, "000001000000000R", 1);   // validité relative : 1 jour
+        dlr(lastMt(to), "DELIVRD");
+        String r = dlrs.poll(5, TimeUnit.SECONDS);
+        assertNotNull(r);
+        assertTrue(r.endsWith("|tlv:" + id + "/" + MessageState.DELIVERED.value()), r);   // receipted_message_id + message_state
+        var q = s.queryShortMessage(id, TypeOfNumber.UNKNOWN, NumberingPlanIndicator.UNKNOWN, sn);
+        assertEquals(MessageState.DELIVERED, q.getMessageState());
+        // registered_delivery = 2 : accusé sur échec seulement
+        String ok = msisdn(), ko = msisdn();
+        submitAt(s, ok, "A", null, null, 2);
+        String idKo = submitAt(s, ko, "B", null, null, 2);
+        dlr(lastMt(ok), "DELIVRD");
+        dlr(lastMt(ko), "UNDELIV");
+        String only = dlrs.poll(5, TimeUnit.SECONDS);
+        assertNotNull(only);
+        assertTrue(only.contains("id:" + idKo) && only.contains("stat:UNDELIV"), only);
+        assertNull(dlrs.poll(1, TimeUnit.SECONDS), "aucun accusé pour le message livré");
+        s.unbindAndClose();
+    }
+
+    @Test
+    void submitMultiDataSmAndSarConcatenation() throws Exception {
+        var s = bind(systemId, password, BindType.BIND_TRX);
+        String a = msisdn(), b = msisdn();
+        var res = s.submitMultiple("", TypeOfNumber.UNKNOWN, NumberingPlanIndicator.UNKNOWN, sn,
+                new Address[]{new Address(TypeOfNumber.INTERNATIONAL, NumberingPlanIndicator.ISDN, "216" + a),
+                        new Address(TypeOfNumber.INTERNATIONAL, NumberingPlanIndicator.ISDN, "216" + b),
+                        new Address(TypeOfNumber.UNKNOWN, NumberingPlanIndicator.UNKNOWN, "12")},
+                new ESMClass(), (byte) 0, (byte) 1, null, null, new RegisteredDelivery(0), ReplaceIfPresentFlag.DEFAULT, new GeneralDataCoding(Alphabet.ALPHA_DEFAULT),
+                (byte) 0, "Info groupe".getBytes(StandardCharsets.ISO_8859_1));
+        assertNotNull(res.getMessageId());
+        assertEquals(1, res.getUnsuccessDeliveries().length);
+        assertEquals(0x0B, res.getUnsuccessDeliveries()[0].getErrorStatusCode());   // destination invalide
+        assertEquals("Info groupe", lastMt(a).getContent());
+        assertEquals("Info groupe", lastMt(b).getContent());
+        // data_sm (§4.7) : texte dans message_payload, alphabet IA5 (data_coding 1)
+        String c = msisdn();
+        var d = s.dataShortMessage("", TypeOfNumber.UNKNOWN, NumberingPlanIndicator.UNKNOWN, sn, TypeOfNumber.INTERNATIONAL, NumberingPlanIndicator.ISDN, c,
+                new ESMClass(), new RegisteredDelivery(0), new GeneralDataCoding(Alphabet.ALPHA_IA5),
+                new OptionalParameter.OctetString(OptionalParameter.Tag.MESSAGE_PAYLOAD.code(), "Message data_sm".getBytes(StandardCharsets.US_ASCII)));
+        assertNotNull(d.getMessageId());
+        assertEquals("Message data_sm", lastMt(c).getContent());
+        // concaténation par TLV SAR (§5.3.2.22-24) au lieu de l'UDH
+        String e = msisdn();
+        for (int i = 1; i <= 2; i++)
+            s.submitShortMessage("", TypeOfNumber.UNKNOWN, NumberingPlanIndicator.UNKNOWN, sn, TypeOfNumber.INTERNATIONAL, NumberingPlanIndicator.ISDN, e,
+                    new ESMClass(), (byte) 0, (byte) 1, null, null, new RegisteredDelivery(0), (byte) 0, new GeneralDataCoding(Alphabet.ALPHA_DEFAULT), (byte) 0,
+                    (i == 1 ? "Partie un, " : "partie deux.").getBytes(StandardCharsets.ISO_8859_1),
+                    new OptionalParameter.Short(OptionalParameter.Tag.SAR_MSG_REF_NUM, (short) 77),
+                    new OptionalParameter.Byte(OptionalParameter.Tag.SAR_TOTAL_SEGMENTS, (byte) 2),
+                    new OptionalParameter.Byte(OptionalParameter.Tag.SAR_SEGMENT_SEQNUM, (byte) i));
+        assertEquals("Partie un, partie deux.", lastMt(e).getContent());
+        s.unbindAndClose();
+    }
+
+    @Test
+    void smppTimeFormats() {
+        var now = Instant.parse("2026-10-16T10:00:00Z");
+        assertEquals(Instant.parse("2026-10-16T11:30:00Z"), tn.vas.smpp.SmppTime.parse("000000013000000R", now));
+        assertEquals(Instant.parse("2026-10-16T09:00:00Z"), tn.vas.smpp.SmppTime.parse("261016100000004+", now));   // UTC+1 (4 quarts d'heure)
+        assertNull(tn.vas.smpp.SmppTime.parse("", now));
+        assertThrows(IllegalArgumentException.class, () -> tn.vas.smpp.SmppTime.parse("2026-10-16", now));
+        assertEquals("261016100000000+", tn.vas.smpp.SmppTime.format(now));
     }
 
     static byte[] concat(byte[] a, byte[] b) {

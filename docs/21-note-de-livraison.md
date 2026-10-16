@@ -8,13 +8,14 @@ Branche `claude/loving-shannon-bwl4rl`. Ce document récapitule le contenu livr�
 | Cœur (lots A à H) | Passerelle SMPP v3.4 (Jasmin), moteur VAS, facturation et rapprochement, API, back-office FR / AR / EN, portail partenaire, supervision, sauvegardes, documentation | `README.md`, `00` à `18` |
 | Options | USSD, IVR, DCB, WhatsApp / RCS (avec modèles), serveur SMPP clients, antifraude (règles et scoring), décisionnel et entrepôt de données, PWA et applications Android / iOS | `20-options-canaux-antifraude-bi.md` |
 | Configuration | Un seul fichier `.env` ; génération (`tools/init-env.py`) et contrôle (`tools/check-env.py`) ; refus de démarrer en production avec un simulateur ou un secret faible | `19-configuration-env.md` |
+| SMPP v3.4 | Matrice de conformité PDU par PDU (opérateurs via Jasmin, serveur partenaires complet), champs, TLV, codes d'erreur, écarts | `22-conformite-smpp-v34.md`, `docs/conformite/Conformite_SMPP_v34_VAS_Tunisie.pdf` |
 | Sécurité | Revue des options et correctifs (DCB sous verrou, remise SMPP bornée, plafond de connexions, accord WhatsApp après STOP) | `07-rapport-securite.md` |
 | Chiffrage | Offre commerciale (99 924 TND HT, 141 JH, 8 semaines) et achats nécessaires ; chiffrages 2 mois et compétitif | `docs/chiffrage/` |
 
-Données : migrations Flyway `V1` à `V17` (appliquées automatiquement au démarrage).
+Données : migrations Flyway `V1` à `V18` (appliquées automatiquement au démarrage).
 
 ## 2. Qualité constatée
-- **142 tests automatisés, 0 échec** : 124 serveur (dont 1 exécuté à part sur PostgreSQL réel) et 18 interface (`12-rapport-tests.md`).
+- **146 tests automatisés, 0 échec** : 128 serveur (dont 1 exécuté à part sur PostgreSQL réel) et 18 interface (`12-rapport-tests.md`).
 - **Intégration sur pile réelle** (PostgreSQL, RabbitMQ, Redis, Jasmin, simulateur SMSC) : tout est OK, y compris USSD → vote → SMS via Jasmin, décisionnel, ETL et scoring sur PostgreSQL (`tests/integration/local-stack.sh test`).
 - **Navigateur** : parcours complet sans exception JavaScript ; **0 violation WCAG 2.1 A/AA** sur 48 vues (français et arabe).
 - **CI** (`.github/workflows/ci.yml`) : build et tests, contrôle du `.env`, image Docker, intégration, accessibilité, parcours navigateur, APK Android, compilation iOS.
