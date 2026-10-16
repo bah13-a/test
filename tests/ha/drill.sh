@@ -2,7 +2,7 @@
 # Exercice de bascule HA en PRÉPRODUCTION (étape 3 du passage en production ; CDC §12.2, NOC : semestriel).
 # Pendant qu'une sonde envoie un MT toutes les 200 ms par le répartiteur, on arrête tour à tour une instance applicative,
 # le primaire PostgreSQL, un nœud RabbitMQ et le primaire Redis ; on mesure l'interruption et on vérifie qu'aucun MT accepté n'est perdu.
-#   BASE=http://localhost:8080 API_KEY=... SIM=98xxxxxx SENDER=85500 OPERATOR=TT infra/ha/drill.sh
+#   BASE=http://localhost:8080 API_KEY=... SIM=98xxxxxx SENDER=85500 OPERATOR=TT tests/ha/drill.sh
 # Prérequis : pile HA démarrée (docker compose -f docker-compose.yml -f infra/ha/docker-compose.ha.yml up -d), liaison SMPP vers le
 # simulateur ou l'environnement de test de l'opérateur (jamais vers de vrais abonnés). Résultat : ha-drill-<date>.md
 set -uo pipefail

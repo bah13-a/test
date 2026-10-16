@@ -32,7 +32,7 @@ Le code couvre tout le périmètre du cahier des charges ; environ 74 % de la ma
 
 - **Prérequis** : Préproduction dimensionnée comme la production (offre : 7 machines virtuelles), pile HA démarrée (`docker compose -f docker-compose.yml -f infra/ha/docker-compose.ha.yml up -d`), liaison SMPP vers le simulateur ou l'environnement de test des opérateurs, jamais vers de vrais abonnés.
 - **Charge** : `k6 run -e BASE=… -e SECRET=… -e API_KEY=… tests/load/k6-mo-mt.js` : MO en rampe jusqu'à 200/s pendant 5 min et API à 100/s ; seuils intégrés : P95 MO < 2 s, P95 API < 500 ms, moins de 0,1 % d'erreurs. Suivi des files RabbitMQ et de la base dans Grafana pendant l'essai.
-- **Bascule** : `BASE=… API_KEY=… SIM=… infra/ha/drill.sh` : une sonde envoie un MT toutes les 200 ms pendant l'arrêt d'une instance applicative, du primaire PostgreSQL (promotion Patroni), d'un nœud RabbitMQ et du primaire Redis ; mesure de la plus longue interruption et contrôle qu'aucun MT accepté n'est perdu.
+- **Bascule** : `BASE=… API_KEY=… SIM=… tests/ha/drill.sh` : une sonde envoie un MT toutes les 200 ms pendant l'arrêt d'une instance applicative, du primaire PostgreSQL (promotion Patroni), d'un nœud RabbitMQ et du primaire Redis ; mesure de la plus longue interruption et contrôle qu'aucun MT accepté n'est perdu.
 - **Critère d'acceptation** : Seuils k6 respectés à 200 SMS/s ; chaque bascule ≤ 30 s ; 0 MT accepté perdu ; restauration de sauvegarde vérifiée (`infra/backup/verify-restore.sh`).
 - **Livrable** : Rapport k6, `ha-drill-<date>.md`, rapport de restauration, intégrés à `12-rapport-tests.md`.
 
