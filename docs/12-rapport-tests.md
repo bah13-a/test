@@ -27,7 +27,7 @@ Environnement d'exécution : conteneur de développement (JDK 21, PostgreSQL 16,
 
 Parcours navigateur (Chromium) et audit d'accessibilité axe-core rejoués avec les nouveaux écrans (Décisionnel, Canaux, Paiements sur facture, Antifraude) : **48 vues en français et en arabe, 0 violation WCAG 2.1 A/AA**, parcours complet sans exception JavaScript.
 
-Total : **146 tests (128 Java dont 1 exécuté à part sur PostgreSQL réel + 18 front), 0 échec**. Intégration sur la pile réelle (PostgreSQL, RabbitMQ, Redis, Jasmin, simulateur SMSC) : tout est OK, y compris USSD → vote → SMS via Jasmin, décisionnel, ETL de l'entrepôt et scoring antifraude sur PostgreSQL. Applications natives : builds Android / iOS confiés au CI (pas de SDK Android ni de Mac dans l'environnement de développement).
+Total : **146 tests (128 Java dont 1 exécuté à part sur PostgreSQL réel + 18 front), 0 échec**. Intégration sur la pile réelle (PostgreSQL, RabbitMQ, Redis, Jasmin, simulateur SMSC) : tout est OK, y compris USSD → vote → SMS via Jasmin, décisionnel, ETL de l'entrepôt et scoring antifraude sur PostgreSQL. Applications natives : builds Android (APK de test) et iOS (compilation simulateur) **réussis dans le CI** (exécution du 16/10/2026). Outils de recette exécutés contre le profil dev : `tn.vas.tools.SmppCheck` **18 / 18** contrôles SMPP v3.4 OK, `tests/recette/operator-check.mjs` **3 / 3** (GSM, UCS-2, 3 segments).
 
 ## 2. Parcours navigateur (Chromium, `frontend/e2e/smoke.mjs`) sur PostgreSQL + Redis réels
 

@@ -32,14 +32,7 @@ prepare_env() {
     HASH="$(java -Dloader.main=tn.vas.tools.HashPassword -cp "$JAR" org.springframework.boot.loader.launch.PropertiesLauncher "$ADMIN_PW" 2>/dev/null)"
     setenv ADMIN_PASSWORD_HASH "$HASH"
   fi
-  mkdir -p "$DATA_DIR"
-  printf 'prefix;operator\n# plage de test chargée par ROUTING_RANGES_FILE\n7777;ORANGE\n' > "$DATA_DIR/ranges.csv"
-  printf 'msisdn;operator\n77771234;OOREDOO\n' > "$DATA_DIR/ported.csv"
-  cat > "$DATA_DIR/catalog.json" <<'JSON'
-{"partners":[{"name":"Partenaire Catalogue","sharePercent":20}],
- "services":[{"name":"Service Catalogue","type":"VOTE","operator":"TT","shortCode":"85503","partner":"Partenaire Catalogue","keywords":["CAT"],
-   "tariffs":[{"eventType":"MT","grossAmount":0.5,"operatorPercent":40,"taxPercent":19}]}]}
-JSON
+  "$HERE/tests/integration/it-data.sh" "$DATA_DIR"
   # valeurs « externes » de la pile locale (en production : fournies par le client / les opérateurs)
   setenv DB_URL "jdbc:postgresql://localhost:$PGPORT/vas"; setenv READ_DB_URL "jdbc:postgresql://localhost:$PGPORT/vas"
   setenv RABBIT_HOST localhost; setenv REDIS_HOST localhost; setenv REDIS_PORT "$REDIS_APP"

@@ -9,6 +9,7 @@ Branche `claude/loving-shannon-bwl4rl`. Ce document récapitule le contenu livr�
 | Options | USSD, IVR, DCB, WhatsApp / RCS (avec modèles), serveur SMPP clients, antifraude (règles et scoring), décisionnel et entrepôt de données, PWA et applications Android / iOS | `20-options-canaux-antifraude-bi.md` |
 | Configuration | Un seul fichier `.env` ; génération (`tools/init-env.py`) et contrôle (`tools/check-env.py`) ; refus de démarrer en production avec un simulateur ou un secret faible | `19-configuration-env.md` |
 | SMPP v3.4 | Matrice de conformité PDU par PDU (opérateurs via Jasmin, serveur partenaires complet), champs, TLV, codes d'erreur, écarts | `22-conformite-smpp-v34.md`, `docs/conformite/Conformite_SMPP_v34_VAS_Tunisie.pdf` |
+| Passage en production | Plan des 6 étapes restantes (opérateurs, partenaires SMPP, charge et HA, intrusion et juridique, tiers, stores) avec outils : `tests/recette/operator-check.mjs`, `tn.vas.tools.SmppCheck`, `infra/ha/drill.sh` | `23-plan-passage-production.md`, `docs/conformite/Plan_passage_production_VAS_Tunisie.pdf` |
 | Sécurité | Revue des options et correctifs (DCB sous verrou, remise SMPP bornée, plafond de connexions, accord WhatsApp après STOP) | `07-rapport-securite.md` |
 | Chiffrage | Offre commerciale (99 924 TND HT, 141 JH, 8 semaines) et achats nécessaires ; chiffrages 2 mois et compétitif | `docs/chiffrage/` |
 
@@ -25,6 +26,8 @@ Données : migrations Flyway `V1` à `V18` (appliquées automatiquement au déma
 - **Production** : `python3 tools/init-env.py` → renseigner `.env` → `python3 tools/check-env.py` (0 erreur) → `docker compose up -d --build` → `docker compose run --rm jasmin-provision`.
 
 ## 4. Checklist de mise en production
+Procédures, outils et critères d'acceptation détaillés : `23-plan-passage-production.md`.
+
 | # | Étape | Responsable | Fait |
 |---|---|---|---|
 | 1 | Hébergement HA, IP, stockage hors site, domaine et certificat TLS commandés | Client | ☐ |

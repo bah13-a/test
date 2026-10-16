@@ -5,7 +5,7 @@ Légende : **Auto** = test automatisé exécuté en CI (`mvn verify`) ; **SIT** 
 | ID | Test | Couverture | Référence |
 |---|---|---|---|
 | A01 | Création opérateur/connecteur sans redémarrage | Auto + SIT | API `PATCH /admin/operators`, `POST /admin/shortcodes` (config en base, audit) ; connecteur Jasmin via `provision.sh` |
-| A02 | Bind SMPP | Auto (simulateur) + OP | `SmppSimulatorTests.bindSubmitAndDlr`, `wrongPasswordIsRejected` ; bind Jasmin↔opérateur : OP |
+| A02 | Bind SMPP | Auto (simulateur) + OP | `SmppSimulatorTests.bindSubmitAndDlr`, `wrongPasswordIsRejected` ; bind Jasmin↔opérateur : OP (`tests/recette/operator-check.mjs`, PV pré-rempli) |
 | A03 | MO keyword déclenché | Auto | `FlowTests.voteFlow_moMtDlr_idempotentBilling` |
 | A04 | Keyword inconnu | Auto | `FlowTests.unknownKeywordIsSilentlyRejected` |
 | A05 | MT corrélé | Auto | `voteFlow...` (correlation_id ↔ smsc_message_id, historique) |
@@ -25,7 +25,7 @@ Légende : **Auto** = test automatisé exécuté en CI (`mvn verify`) ; **SIT** 
 | A19 | DCB : code, débit, remboursement, abus | Auto | `dcbOtpChargeRefundAndIsolation`, `dcbInsufficientBalanceAndOtpAbuse`, `concurrentDcbConfirmationsCannotBypassTheAttemptLimit` ; **OP** : API DCB |
 | A20 | WhatsApp / RCS : entrant signé, réponse, statut | Auto | `whatsappInboundRoutesToKeywordAndRepliesOnSameChannel`, `rcsInboundSigned` ; **OP** : compte Meta / fournisseur RCS |
 | A21 | Modèles WhatsApp : approbation, accord, STOP | Auto | `whatsappTemplatesRequireApprovalAndOptInAndStopRevokes` |
-| A22 | Serveur SMPP clients : bind, submit, accusés, MO, refus | Auto | `SmppServerTests` (9 scénarios, vrai client SMPP) ; **PART** : recette avec chaque partenaire |
+| A22 | Serveur SMPP clients : bind, submit, accusés, MO, refus | Auto | `SmppServerTests` (9 scénarios, vrai client SMPP) ; **PART** : recette avec chaque partenaire (`tn.vas.tools.SmppCheck`, 18 contrôles) |
 | A23 | Antifraude : vitesse, plafond, score | Auto | `velocityBlocksNumberButStopStillWorks`, `dailySpendLimitStopsBilledActions`, `riskScoreIsExplainableAndFlagsOutliers` ; calibrage sur historique réel |
 | A24 | Décisionnel et entrepôt | Auto + SIT | `analyticsOverviewAndExport`, `dataWarehouseEtlIsIdempotentAndMatchesTheLedger` ; pile réelle : ETL sur PostgreSQL |
 | A25 | Applications mobiles | CI | PWA : `options.test.jsx` ; Android / iOS : jobs `mobile-android`, `mobile-ios` ; **stores** : publication client |
